@@ -1,9 +1,8 @@
-// This is a basic Flutter widget test.
+// WIDGET test - the app rendered, states observed, real data displayed.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Copy this pattern for every screen: pump the widget, assert the loading
+// state, settle, then assert the loaded state. A screen is not "done" until
+// this passes.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +10,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pharma_finder/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('shows a loading spinner, then the facility list', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const PharmaFinderApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // First frame: the Cubit emitted Loading, nothing fetched yet.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Let the faked fetch complete.
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Find care'), findsOneWidget);
+    expect(find.text('Kigali Care Pharmacy'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('renders the out-of-stock marker for a facility without stock', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const PharmaFinderApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nyarutarama Clinic'), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
   });
 }

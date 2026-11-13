@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -40,49 +41,49 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAc5AtVuXeaXSxpjnR11h47Ps-afcoEdGo',
-    appId: '1:938815405622:web:800384b3c3cb8c699d2297',
-    messagingSenderId: '938815405622',
-    projectId: 'medimatch-b4737',
-    authDomain: 'medimatch-b4737.firebaseapp.com',
-    storageBucket: 'medimatch-b4737.firebasestorage.app',
+  static  FirebaseOptions web = FirebaseOptions(
+    apiKey: dotenv.env['WEB_API_KEY']!,
+    appId: dotenv.env['WEB_APP_ID']!,
+    messagingSenderId: dotenv.env['WEB_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['WEB_PROJECT_ID']!,
+    authDomain: dotenv.env['WEB_AUTH_DOMAIN']!,
+    storageBucket: dotenv.env['WEB_STORAGE_BUCKET']!,
   );
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBCjoxruc6SvavFaLMaE3Jjn7b10nXVOP0',
-    appId: '1:938815405622:android:0e31cb5ce6ff98af9d2297',
-    messagingSenderId: '938815405622',
-    projectId: 'medimatch-b4737',
-    storageBucket: 'medimatch-b4737.firebasestorage.app',
+  static  FirebaseOptions android = FirebaseOptions(
+    apiKey: dotenv.env['ANDROID_API_KEY']!,
+    appId: dotenv.env['ANDROID_APP_ID']!,
+    messagingSenderId: dotenv.env['ANDROID_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['ANDROID_PROJECT_ID']!,
+    storageBucket: dotenv.env['ANDROID_STORAGE_BUCKET']!,
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBJ9QPLG8lK8wydeihiivl6e6dHm4P8i6k',
-    appId: '1:938815405622:ios:fb290adbde478f3c9d2297',
-    messagingSenderId: '938815405622',
-    projectId: 'medimatch-b4737',
-    storageBucket: 'medimatch-b4737.firebasestorage.app',
-    iosClientId: '938815405622-h3ogd4g2v97o3uvlfioep2gdj7ciqsus.apps.googleusercontent.com',
-    iosBundleId: 'rw.alu.pharmaFinder',
+  static   FirebaseOptions ios = FirebaseOptions(
+    apiKey: dotenv.env['IOS_API_KEY']!,
+    appId: dotenv.env['IOS_APP_ID']!,
+    messagingSenderId: dotenv.env['IOS_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['IOS_PROJECT_ID']!,
+    storageBucket: dotenv.env['IOS_STORAGE_BUCKET']!,
+    iosClientId: dotenv.env['IOS_CLIENT_ID']!,
+    iosBundleId: dotenv.env['IOS_BUNDLE_ID']!,
   );
 
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBJ9QPLG8lK8wydeihiivl6e6dHm4P8i6k',
-    appId: '1:938815405622:ios:fb290adbde478f3c9d2297',
-    messagingSenderId: '938815405622',
-    projectId: 'medimatch-b4737',
-    storageBucket: 'medimatch-b4737.firebasestorage.app',
-    iosClientId: '938815405622-h3ogd4g2v97o3uvlfioep2gdj7ciqsus.apps.googleusercontent.com',
-    iosBundleId: 'rw.alu.pharmaFinder',
+  static  FirebaseOptions macos = FirebaseOptions(
+    apiKey: dotenv.env['MACOS_API_KEY']!,
+    appId: dotenv.env['MACOS_APP_ID']!,
+    messagingSenderId: dotenv.env['MACOS_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['MACOS_PROJECT_ID']!,
+    storageBucket: dotenv.env['MACOS_STORAGE_BUCKET']!,
+    iosClientId: dotenv.env['MACOS_CLIENT_ID']!,
+    iosBundleId: dotenv.env['MACOS_BUNDLE_ID']!,
   );
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAc5AtVuXeaXSxpjnR11h47Ps-afcoEdGo',
-    appId: '1:938815405622:web:682e859a43ae5b3e9d2297',
-    messagingSenderId: '938815405622',
-    projectId: 'medimatch-b4737',
-    authDomain: 'medimatch-b4737.firebaseapp.com',
-    storageBucket: 'medimatch-b4737.firebasestorage.app',
+  static FirebaseOptions windows = FirebaseOptions(
+    apiKey: dotenv.env['WINDOW_API_KEY']!,
+    appId: dotenv.env['WINDOW_APP_ID']!,
+    messagingSenderId: dotenv.env['WINDOW_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['WINDOW_PROJECT_ID']!,
+    authDomain: dotenv.env['WINDOW_AUTH_DOMAIN']!,
+    storageBucket: dotenv.env['WINDOW_STORAGE_BUCKET']!,
   );
 }

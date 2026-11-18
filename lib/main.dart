@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'location/live_location.dart';
 import 'screen/onboarding_screen.dart';
 
 void main() async {
@@ -40,7 +42,10 @@ class pharmFinder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+
+    return BlocProvider(
+      create: (context) => LocationCubit()..getCurrentLocation(),
+      child: MaterialApp(
       title: 'Medi Match',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -48,6 +53,7 @@ class pharmFinder extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const OnboardingScreen(),
+    ),
     );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../location/live_location.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -41,10 +43,40 @@ class OnboardingScreen extends StatelessWidget {
                     children: [
                       const Text('MediMatch', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
                       const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: const Color(0xFFE1F5EE), borderRadius: BorderRadius.circular(10)),
-                        child: const Text('Rwanda', style: TextStyle(fontSize: 9, color: primaryColor, fontWeight: FontWeight.bold)),
+                      BlocBuilder<LocationCubit, LocationState>(
+                        builder: (context, state) {
+                          String label = 'Locating...';
+                          if (state is LocationLoaded) {
+                            label = state.placeName; // e.g., "Gasabo, Kigali"
+                            } else if (state is LocationError) {
+                              label = 'Rwanda'; // Graceful fallback
+                            }
+                            return GestureDetector(
+                              onTap: () => context.read<LocationCubit>().getCurrentLocation(), 
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE1F5EE),
+                                  borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.location_on, size: 10, color: Color(0xFF0F4C3A)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        label,
+                                        style: const TextStyle(
+                                          fontSize: 9.5,
+                                          color: Color(0xFF0F4C3A),
+                                          fontWeight: FontWeight.bold,
+                                          ),
+                                      ),
+                                  ],
+                               ),
+                             ),
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -7,7 +7,7 @@ class OnboardingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF0F4C3A); // Deep teal theme
+    const primaryColor = Color(0xFF0F4C3A);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -88,6 +88,7 @@ class OnboardingScreen extends StatelessWidget {
 
             // Illustration Banner
             Container(
+              width: double.infinity,
               height: 140,
               decoration: BoxDecoration(
                 color: const Color(0xFFF0F4FF),
@@ -104,7 +105,7 @@ class OnboardingScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
             // Title & Description
             const Text(

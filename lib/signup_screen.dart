@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../screen/insurance_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -33,43 +34,135 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final contact = _contactCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
-    if (name.isEmpty || contact.isEmpty || password.length < 6) {
-      _showMsg('Enter full name, contact, and a 6+ char password.');
+    if (name.isEmpty || contact.isEmpty) {
+      _showMsg('Please enter your full name and ${_isPhoneMode ? 'phone number' : 'email'}.');
+      return;
+    }
+
+    if (!_isPhoneMode && password.length < 6) {
+      _showMsg('Password must be at least 6 characters.');
       return;
     }
 
     setState(() => _isLoading = true);
+
     try {
-      // Use a dummy email for phone-based registration
-      final authEmail = _isPhoneMode
-          ? '${contact.replaceAll(' ', '')}@medimatch.rw'
-          : contact;
+      if (_isPhoneMode) {
+        // 1. REAL PHONE NUMBER SIGN-UP (+250...)
+        final formattedPhone = '+250${contact.replaceAll(' ', '')}';
 
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: authEmail,
-        password: password,
-      );
-
-      // Save user profile in Firestore
-      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
-        'fullName': name,
-        'phone': _isPhoneMode ? '+250$contact' : '',
-        'email': _isPhoneMode ? '' : contact,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) _showMsg('Account created! Welcome to MediMatch.');
+        await FirebaseAuth.instance.verifyPhoneNumber(
+          phoneNumber: formattedPhone,
+          verificationCompleted: (PhoneAuthCredential credential) async {
+            // Auto-verified on Android
+            final cred = await FirebaseAuth.instance.signInWithCredential(credential);
+            await _saveUserToFirestore(cred.user!.uid, name: name, phone: formattedPhone, email: '');
+          },
+          verificationFailed: (FirebaseAuthException e) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              _showMsg('Phone Auth Error: ${e.message}');
+            }
+          },
+          codeSent: (String verificationId, int? resendToken) {
+            if (mounted) setState(() => _isLoading = false);
+            _showOtpDialog(verificationId, name, formattedPhone);
+          },
+          codeAutoRetrievalTimeout: (String verificationId) {},
+        );
+      } else {
+        // 2. EMAIL SIGN-UP 
+        final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: contact,
+          password: password,
+        );
+        await _saveUserToFirestore(cred.user!.uid, name: name, phone: '', email: contact);
+      }
     } on FirebaseAuthException catch (e) {
-      _showMsg(e.message ?? 'Registration failed.');
+      if (mounted) _showMsg(e.message ?? 'Registration failed.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (!_isPhoneMode && mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showMsg(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  Future<void> _saveUserToFirestore(
+    String uid, {
+    required String name,
+    required String phone,
+    required String email,
+  }) async {
+    try {
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'fullName': name,
+      'phone': phone,
+      'email': email,
+      'createdAt': FieldValue.serverTimestamp(),
+    })
+    .timeout(const Duration(seconds: 15));
+    } catch (e) {
+     debugPrint('Firestore saving error: $e');
+    } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _showMsg('Account created! Welcome to MediMatch.');
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const InsuranceScreen())
+      );
+    }
+  }
   }
 
+  void _showOtpDialog(String verificationId, String name, String phone) {
+    final otpCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter 6-Digit SMS Code'),
+        content: TextField(
+          controller: otpCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          decoration: const InputDecoration(hintText: '123456'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              try {
+                final credential = PhoneAuthProvider.credential(
+                  verificationId: verificationId,
+                  smsCode: otpCtrl.text.trim(),
+                );
+                final cred = await FirebaseAuth.instance.signInWithCredential(credential);
+                await _saveUserToFirestore(cred.user!.uid, name: name, phone: phone, email: '');
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                  _showMsg('Invalid OTP code.');
+                }
+              }
+            },
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMsg(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
+     
   @override
   Widget build(BuildContext context) {
     return Scaffold(

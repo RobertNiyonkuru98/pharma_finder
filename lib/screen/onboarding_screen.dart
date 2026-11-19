@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../location/live_location.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../signup_screen.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -47,7 +48,7 @@ class OnboardingScreen extends StatelessWidget {
                         builder: (context, state) {
                           String label = 'Locating...';
                           if (state is LocationLoaded) {
-                            label = state.placeName; // e.g., "Gasabo, Kigali"
+                            label = state.placeName; // Current location of where user are at that moment
                             } else if (state is LocationError) {
                               label = 'Rwanda'; // Graceful fallback
                             }
@@ -136,7 +137,12 @@ class OnboardingScreen extends StatelessWidget {
                   backgroundColor: primaryColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                  );
+                },
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

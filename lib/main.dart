@@ -17,7 +17,7 @@ void main() async {
       );
       runApp(const pharmFinder());
       } catch (e) {
-        print("Firebase initialization error: $e");
+        debugPrint("Firebase initialization error: $e");
         
         }
         }

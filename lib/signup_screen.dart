@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../screen/insurance_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -48,13 +50,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     try {
       if (_isPhoneMode) {
-        // 1. REAL PHONE NUMBER SIGN-UP (+250...)
+        // 1. REAL PHONE NUMBER SIGN-UP
         final formattedPhone = '+250${contact.replaceAll(' ', '')}';
 
         await FirebaseAuth.instance.verifyPhoneNumber(
           phoneNumber: formattedPhone,
           verificationCompleted: (PhoneAuthCredential credential) async {
-            // Auto-verified on Android
             final cred = await FirebaseAuth.instance.signInWithCredential(credential);
             await _saveUserToFirestore(cred.user!.uid, name: name, phone: formattedPhone, email: '');
           },
@@ -71,7 +72,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           codeAutoRetrievalTimeout: (String verificationId) {},
         );
       } else {
-        // 2. EMAIL SIGN-UP 
+        // 2. EMAIL SIGN-UP
         final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: contact,
           password: password,
@@ -85,6 +86,66 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  // Sign Up Using Google Account
+  Future<void> _signUpWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+      if (webClientId == null || webClientId.isEmpty) {
+        throw Exception('GOOGLE_WEB_CLIENT_ID is missing in .env');
+      }
+
+      await GoogleSignIn.instance.initialize(
+        serverClientId: webClientId,
+      );
+
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      if (googleAuth.idToken == null) {
+        throw Exception('Missing Google ID Token. Check your Web Client ID and SHA-1 in Firebase.');
+      }
+
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCred =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCred.user!.uid)
+          .set({
+            'fullName': userCred.user!.displayName ?? googleUser.displayName ?? '',
+            'email': userCred.user!.email ?? googleUser.email,
+            'phone': userCred.user!.phoneNumber ?? '',
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 15));
+
+      if (mounted) {
+        _showMsg('Signed in with Google! Welcome to MediMatch.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const InsuranceScreen()),
+        );
+      }
+    } on GoogleSignInException catch (e) {
+      debugPrint('Google Sign-In Cancelled or Failed: ${e.code} - ${e.description}');
+      if (mounted && e.code != GoogleSignInExceptionCode.canceled) {
+        _showMsg('Google Sign-In Error (${e.code.name}): ${e.description ?? 'Please try again.'}');
+      }
+    } catch (e) {
+      debugPrint('Sign In with Google Failed: $e');
+      if (mounted) _showMsg('Google Sign-In failed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+    
+ 
+
   Future<void> _saveUserToFirestore(
     String uid, {
     required String name,
@@ -92,25 +153,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
     required String email,
   }) async {
     try {
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
-      'fullName': name,
-      'phone': phone,
-      'email': email,
-      'createdAt': FieldValue.serverTimestamp(),
-    })
-    .timeout(const Duration(seconds: 15));
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set({
+            'fullName': name,
+            'phone': phone,
+            'email': email,
+            'createdAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
     } catch (e) {
-     debugPrint('Firestore saving error: $e');
+      debugPrint('Firestore saving error: $e');
     } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _showMsg('Account created! Welcome to MediMatch.');
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const InsuranceScreen())
-      );
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showMsg('Account created! Welcome to MediMatch.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const InsuranceScreen()),
+        );
+      }
     }
-  }
   }
 
   void _showOtpDialog(String verificationId, String name, String phone) {
@@ -162,7 +226,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-     
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -178,7 +241,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: BoxDecoration(
                   color: _primaryColor,
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: [BoxShadow(color: _primaryColor.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: _primaryColor.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
                 ),
                 child: const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 32),
               ),
@@ -191,7 +260,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   children: [
                     Icon(Icons.verified_user, size: 13, color: _primaryColor),
                     SizedBox(width: 5),
-                    Text('SECURE HEALTHCARE PORTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _primaryColor, letterSpacing: 0.5)),
+                    Text(
+                      'SECURE HEALTHCARE PORTAL',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _primaryColor, letterSpacing: 0.5),
+                    ),
                   ],
                 ),
               ),
@@ -254,10 +326,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const SizedBox(height: 12),
 
                     // Password Field
-                    const Text('Create Password', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    _inputField(controller: _passwordCtrl, hint: 'Minimum 6 characters', icon: Icons.lock_outline, obscure: true),
-                    const SizedBox(height: 16),
+                    if (!_isPhoneMode) ...[
+                      const Text('Create Password', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      _inputField(controller: _passwordCtrl, hint: 'Minimum 6 characters', icon: Icons.lock_outline, obscure: true),
+                      const SizedBox(height: 16),
+                    ] else
+                      const SizedBox(height: 4),
 
                     // Submit Button
                     SizedBox(
@@ -296,7 +371,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           side: BorderSide.none,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                         ),
-                        onPressed: () {}, // Hook GoogleAuthProvider here
+                        onPressed: _isLoading ? null : _signUpWithGoogle,
                         icon: const Icon(Icons.g_mobiledata, color: Colors.red, size: 26),
                         label: const Text('Continue with Google', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
                       ),
@@ -306,7 +381,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Privacy Card (Matches Login Figma)
+              // Privacy Card
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: _surfaceColor, borderRadius: BorderRadius.circular(16)),
@@ -339,7 +414,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 children: [
                   const Text('Already have an account? ', style: TextStyle(fontSize: 12.5, color: Colors.black54)),
                   GestureDetector(
-                    onTap: () => Navigator.pop(context), // Navigates back to LoginScreen
+                    onTap: () => Navigator.pop(context),
                     child: const Text('Sign In', style: TextStyle(fontSize: 12.5, color: _primaryColor, fontWeight: FontWeight.bold)),
                   ),
                 ],

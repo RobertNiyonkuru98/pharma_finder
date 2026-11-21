@@ -113,16 +113,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final UserCredential userCred =
           await FirebaseAuth.instance.signInWithCredential(credential);
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCred.user!.uid)
-          .set({
-            'fullName': userCred.user!.displayName ?? googleUser.displayName ?? '',
-            'email': userCred.user!.email ?? googleUser.email,
-            'phone': userCred.user!.phoneNumber ?? '',
-            'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true))
-          .timeout(const Duration(seconds: 15));
+      // Save profile to Firestore without blocking navigation if offline/slow
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCred.user!.uid)
+            .set({
+              'fullName': userCred.user!.displayName ?? googleUser.displayName ?? '',
+              'email': userCred.user!.email ?? googleUser.email,
+              'phone': userCred.user!.phoneNumber ?? '',
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 10));
+      } catch (firestoreError) {
+        debugPrint('Firestore profile sync warning: $firestoreError');
+      }
 
       if (mounted) {
         _showMsg('Signed in with Google! Welcome to MediMatch.');
@@ -143,9 +148,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-    
- 
 
+// Saving user credintials to Firebase Firestore after successful registration (phone/email/google)
   Future<void> _saveUserToFirestore(
     String uid, {
     required String name,
@@ -220,12 +224,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
+// Display a SnackBar message at the bottom of the screen
   void _showMsg(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text)),
     );
   }
 
+// Main UI Build Method
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -304,7 +310,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     // Full Name Field
                     const Text('Full Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
-                    _inputField(controller: _nameCtrl, hint: 'e.g. Jean Claude Mugabo', icon: Icons.person_outline),
+                    _inputField(controller: _nameCtrl, hint: 'e.g. Nyiramanzi Igihozo', icon: Icons.person_outline),
                     const SizedBox(height: 12),
 
                     // Phone or Email Field
@@ -318,7 +324,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const SizedBox(height: 6),
                     _inputField(
                       controller: _contactCtrl,
-                      hint: _isPhoneMode ? '788 123 456' : 'name@example.com',
+                      hint: _isPhoneMode ? '788 123 456' : 'name@gmail.com',
                       prefixText: _isPhoneMode ? '🇷🇼 +250  ' : null,
                       icon: _isPhoneMode ? null : Icons.alternate_email,
                       keyboardType: _isPhoneMode ? TextInputType.phone : TextInputType.emailAddress,

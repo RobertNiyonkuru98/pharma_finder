@@ -85,6 +85,7 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           const _SectionLabel('My insurance policy'),
           _InsuranceCard(uid: user?.uid),
+          _RemoveSchemeTile(uid: user?.uid),
           const SizedBox(height: AppSpacing.md),
           const _SectionLabel('Account'),
           Card(
@@ -263,6 +264,75 @@ class _InsurancePlaceholder extends StatelessWidget {
         child: Text(
           message,
           style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
+      ),
+    );
+  }
+}
+
+/// Delete operation: removes the saved scheme fields from the user document.
+///
+/// Kept as its own widget so the card above stays a pure read-only view, and so
+/// the delete path has its own busy state and error reporting.
+class _RemoveSchemeTile extends StatefulWidget {
+  final String? uid;
+
+  const _RemoveSchemeTile({required this.uid});
+
+  @override
+  State<_RemoveSchemeTile> createState() => _RemoveSchemeTileState();
+}
+
+class _RemoveSchemeTileState extends State<_RemoveSchemeTile> {
+  bool _busy = false;
+
+  Future<void> _remove() async {
+    final uid = widget.uid;
+    if (uid == null) return;
+
+    setState(() => _busy = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'insurancePlanId': FieldValue.delete(),
+        'insurancePlanName': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved scheme removed from Firestore.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.uid == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 4),
+      child: TextButton.icon(
+        onPressed: _busy ? null : _remove,
+        icon: _busy
+            ? const SizedBox(
+                height: 14,
+                width: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: AppColors.danger,
+              ),
+        label: const Text(
+          'Remove saved scheme',
+          style: TextStyle(fontSize: 13, color: AppColors.danger),
         ),
       ),
     );

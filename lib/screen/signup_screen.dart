@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
+import '../services/auth_helpers.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -43,6 +44,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
+    if (_isPhoneMode && !isValidRwandanPhone(contact)) {
+      _showMsg('Enter a valid Rwandan mobile number, e.g. 788 123 456.');
+      return;
+    }
+
     if (!_isPhoneMode && password.length < 6) {
       _showMsg('Password must be at least 6 characters.');
       return;
@@ -53,25 +59,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       if (_isPhoneMode) {
         // 1. REAL PHONE NUMBER SIGN-UP
-        final formattedPhone = '+250${contact.replaceAll(' ', '')}';
+        final formattedPhone = normalizeRwandanPhone(contact);
 
         await FirebaseAuth.instance.verifyPhoneNumber(
           phoneNumber: formattedPhone,
           verificationCompleted: (PhoneAuthCredential credential) async {
-            final cred = await FirebaseAuth.instance.signInWithCredential(
-              credential,
-            );
-            await _saveUserToFirestore(
-              cred.user!.uid,
-              name: name,
-              phone: formattedPhone,
-              email: '',
-            );
+            try {
+              final cred = await FirebaseAuth.instance.signInWithCredential(
+                credential,
+              );
+              await _saveUserToFirestore(
+                cred.user!.uid,
+                name: name,
+                phone: formattedPhone,
+                email: '',
+              );
+            } on FirebaseAuthException catch (e) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                _showMsg(friendlyAuthError(e, mode: 'phone'));
+              }
+            }
           },
           verificationFailed: (FirebaseAuthException e) {
             if (mounted) {
               setState(() => _isLoading = false);
-              _showMsg('Phone Auth Error: ${e.message}');
+              _showMsg(
+                'Phone Auth Error: ${friendlyAuthError(e, mode: 'phone')}',
+              );
             }
           },
           codeSent: (String verificationId, int? resendToken) {
@@ -94,9 +109,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) _showMsg(e.message ?? 'Registration failed.');
+      if (mounted) {
+        _showMsg(friendlyAuthError(e, mode: _isPhoneMode ? 'phone' : 'email'));
+      }
+    } catch (e) {
+      debugPrint('Registration failed: $e');
+      if (mounted) {
+        _showMsg(
+          'Registration failed. Please check your connection and try again.',
+        );
+      }
     } finally {
-      if (!_isPhoneMode && mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -105,11 +129,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
     try {
       final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
-      if (webClientId == null || webClientId.isEmpty) {
-        throw Exception('GOOGLE_WEB_CLIENT_ID is missing in .env');
-      }
-
-      await GoogleSignIn.instance.initialize(serverClientId: webClientId);
+      // Fall back to the web OAuth client in google-services.json when unset.
+      await GoogleSignIn.instance.initialize(
+        serverClientId: (webClientId == null || webClientId.isEmpty)
+            ? null
+            : webClientId,
+      );
 
       final GoogleSignInAccount googleUser = await GoogleSignIn.instance
           .authenticate();
@@ -152,6 +177,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           MaterialPageRoute(builder: (context) => const InsuranceScreen()),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) _showMsg(friendlyAuthError(e, mode: 'google'));
     } on GoogleSignInException catch (e) {
       debugPrint(
         'Google Sign-In Cancelled or Failed: ${e.code} - ${e.description}',
@@ -237,10 +264,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   phone: phone,
                   email: '',
                 );
-              } catch (e) {
+              } on FirebaseAuthException catch (e) {
                 if (mounted) {
                   setState(() => _isLoading = false);
-                  _showMsg('Invalid OTP code.');
+                  _showMsg(friendlyAuthError(e, mode: 'phone'));
+                }
+              } catch (_) {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                  _showMsg('Could not verify that code. Please try again.');
                 }
               }
             },

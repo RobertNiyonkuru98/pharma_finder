@@ -41,7 +41,7 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static  FirebaseOptions web = FirebaseOptions(
+  static FirebaseOptions web = FirebaseOptions(
     apiKey: dotenv.env['WEB_API_KEY']!,
     appId: dotenv.env['WEB_APP_ID']!,
     messagingSenderId: dotenv.env['WEB_MESSAGING_SENDER_ID']!,
@@ -50,7 +50,7 @@ class DefaultFirebaseOptions {
     storageBucket: dotenv.env['WEB_STORAGE_BUCKET']!,
   );
 
-  static  FirebaseOptions android = FirebaseOptions(
+  static FirebaseOptions android = FirebaseOptions(
     apiKey: dotenv.env['ANDROID_API_KEY']!,
     appId: dotenv.env['ANDROID_APP_ID']!,
     messagingSenderId: dotenv.env['ANDROID_MESSAGING_SENDER_ID']!,
@@ -58,7 +58,7 @@ class DefaultFirebaseOptions {
     storageBucket: dotenv.env['ANDROID_STORAGE_BUCKET']!,
   );
 
-  static   FirebaseOptions ios = FirebaseOptions(
+  static FirebaseOptions ios = FirebaseOptions(
     apiKey: dotenv.env['IOS_API_KEY']!,
     appId: dotenv.env['IOS_APP_ID']!,
     messagingSenderId: dotenv.env['IOS_MESSAGING_SENDER_ID']!,
@@ -68,7 +68,7 @@ class DefaultFirebaseOptions {
     iosBundleId: dotenv.env['IOS_BUNDLE_ID']!,
   );
 
-  static  FirebaseOptions macos = FirebaseOptions(
+  static FirebaseOptions macos = FirebaseOptions(
     apiKey: dotenv.env['MACOS_API_KEY']!,
     appId: dotenv.env['MACOS_APP_ID']!,
     messagingSenderId: dotenv.env['MACOS_MESSAGING_SENDER_ID']!,

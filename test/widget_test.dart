@@ -12,9 +12,9 @@ import 'package:pharma_finder/features/facilities/presentation/cubit/facilities_
 import 'package:pharma_finder/features/facilities/presentation/screens/facilities_screen.dart';
 
 Widget _harness() => BlocProvider(
-      create: (_) => FacilitiesCubit()..load(),
-      child: const MaterialApp(home: FacilitiesScreen()),
-    );
+  create: (_) => FacilitiesCubit()..load(),
+  child: const MaterialApp(home: FacilitiesScreen()),
+);
 
 void main() {
   testWidgets('shows a spinner first, then the facility list', (tester) async {

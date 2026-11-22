@@ -1,22 +1,7 @@
-import 'package:flutter/material.dart';
-
-class InsuranceScreen extends StatelessWidget {
-  const InsuranceScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Health Insurance'),
-        backgroundColor: const Color(0xFF0A6C56),
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(
-        child: Text(
-          'Insurance Selection Page',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-}
+// Compatibility export.
+//
+// The login and signup screens import `screen/insurance_screen.dart`. The real
+// implementation now lives under `features/insurance/` so it follows the
+// Clean Architecture layering; this file keeps the existing imports working
+// without editing Igihozo's screens.
+export 'package:pharma_finder/features/insurance/presentation/screens/insurance_screen.dart';

@@ -1,34 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'firebase_options.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'location/live_location.dart';
+import 'screen/onboarding_screen.dart';
 
-import 'features/facilities/presentation/cubit/facilities_cubit.dart';
-import 'features/facilities/presentation/screens/facilities_screen.dart';
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const  TempLoadingApp());
 
-void main() {
-  runApp(const PharmaFinderApp());
-}
+  try {
+    await dotenv.load(fileName: ".env");
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+      );
+      runApp(const pharmFinder());
+      } catch (e) {
+        debugPrint("Firebase initialization error: $e");
+        
+        }
+        }
 
-/// NOTE: there is deliberately no Firebase.initializeApp() yet.
-///
-/// That call needs firebase_options.dart, which Igihozo produces when he
-/// creates the Firebase project. Calling it before then crashes on launch and
-/// would break the rule that `main` always builds and runs.
-class PharmaFinderApp extends StatelessWidget {
-  const PharmaFinderApp({super.key});
+class TempLoadingApp extends StatelessWidget {
+  const TempLoadingApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => FacilitiesCubit()..load(),
-      child: MaterialApp(
-        title: 'PharmaFinder',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: .fromSeed(seedColor: Colors.teal),
+    return const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
         ),
-        home: const FacilitiesScreen(),
       ),
+    );
+  }
+}
+
+class pharmFinder extends StatelessWidget {
+  const pharmFinder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+
+    return BlocProvider(
+      create: (context) => LocationCubit()..getCurrentLocation(),
+      child: MaterialApp(
+      title: 'Medi Match',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        useMaterial3: true,
+      ),
+      home: const OnboardingScreen(),
+    ),
     );
   }
 }

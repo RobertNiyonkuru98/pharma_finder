@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import '../signup_screen.dart';
+import '../services/auth_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,26 +41,36 @@ class _LoginScreenState extends State<LoginScreen> {
 // Signing In with Phone or Email
   Future<void> _signIn() async {
     final contact = _contactCtrl.text.trim();
-    if (contact.isEmpty) return _msg('Enter your ${_isPhone ? 'phone number' : 'email'}.');
+    if (contact.isEmpty) {
+      _msg('Enter your ${_isPhone ? 'phone number' : 'email'}.');
+      return;
+    }
+    if (_isPhone && !isValidRwandanPhone(contact)) {
+      _msg('Enter a valid Rwandan mobile number, e.g. 788 123 456.');
+      return;
+    }
+    if (!_isPhone && _passCtrl.text.trim().isEmpty) {
+      _msg('Enter your password.');
+      return;
+    }
     setState(() => _loading = true);
 
     try {
       if (_isPhone) {
-        final phone = '+250${contact.replaceAll(' ', '')}';
         await FirebaseAuth.instance.verifyPhoneNumber(
-          phoneNumber: phone,
+          phoneNumber: normalizeRwandanPhone(contact),
           verificationCompleted: (cred) async {
-            await FirebaseAuth.instance.signInWithCredential(cred);
-            _goNext('Welcome back to MediMatch!');
+            try {
+              await FirebaseAuth.instance.signInWithCredential(cred);
+              _goNext('Welcome back to MediMatch!');
+            } on FirebaseAuthException catch (e) {
+              if (mounted) _msg(friendlyAuthError(e, mode: 'phone'));
+            }
           },
           verificationFailed: (e) {
-            if (mounted) setState(() => _loading = false);
-            _msg('Phone Auth Error: ${e.message}');
+            if (mounted) _msg('Phone Auth Error: ${friendlyAuthError(e, mode: 'phone')}');
           },
-          codeSent: (verId, _) {
-            if (mounted) setState(() => _loading = false);
-            _showOtp(verId);
-          },
+          codeSent: (verId, _) => _showOtp(verId),
           codeAutoRetrievalTimeout: (_) {},
         );
       } else {
@@ -70,9 +81,12 @@ class _LoginScreenState extends State<LoginScreen> {
         _goNext('Welcome back to MediMatch!');
       }
     } on FirebaseAuthException catch (e) {
-      _msg(e.message ?? 'Sign-in failed.');
+      _msg(friendlyAuthError(e, mode: _isPhone ? 'phone' : 'email'));
+    } catch (e) {
+      debugPrint('Sign-in failed: $e');
+      _msg('Sign-in failed. Please check your connection and try again.');
     } finally {
-      if (!_isPhone && mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -81,10 +95,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _loading = true);
     try {
-      final webId = dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? '';
-      await GoogleSignIn.instance.initialize(serverClientId: webId);
+      final webId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+      // Fall back to the web OAuth client in google-services.json when unset.
+      await GoogleSignIn.instance.initialize(
+        serverClientId: (webId == null || webId.isEmpty) ? null : webId,
+      );
       final user = await GoogleSignIn.instance.authenticate();
-      final cred = GoogleAuthProvider.credential(idToken: user.authentication.idToken);
+      final idToken = user.authentication.idToken;
+
+      // A null ID token would build a malformed credential and Firebase would
+      // reject it with "supplied auth credential is incorrect or malformed".
+      if (idToken == null) {
+        throw Exception('Missing Google ID Token. Check your Web Client ID and SHA-1 in Firebase.');
+      }
+
+      final cred = GoogleAuthProvider.credential(idToken: idToken);
       final res = await FirebaseAuth.instance.signInWithCredential(cred);
 
       FirebaseFirestore.instance.collection('users').doc(res.user!.uid).set({
@@ -94,6 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }, SetOptions(merge: true)).catchError((e) => debugPrint('Firestore sync: $e'));
 
       _goNext('Signed in with Google!');
+    } on FirebaseAuthException catch (e) {
+      _msg(friendlyAuthError(e, mode: 'google'));
     } on GoogleSignInException catch (e) {
       if (e.code != GoogleSignInExceptionCode.canceled) _msg('Google Sign-In failed: ${e.description}');
     } catch (e) {
@@ -122,9 +149,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 final cred = PhoneAuthProvider.credential(verificationId: verId, smsCode: otpCtrl.text.trim());
                 await FirebaseAuth.instance.signInWithCredential(cred);
                 _goNext('Welcome back to MediMatch!');
+              } on FirebaseAuthException catch (e) {
+                if (mounted) {
+                  setState(() => _loading = false);
+                  _msg(friendlyAuthError(e, mode: 'phone'));
+                }
               } catch (_) {
-                if (mounted) setState(() => _loading = false);
-                _msg('Invalid OTP code.');
+                if (mounted) {
+                  setState(() => _loading = false);
+                  _msg('Could not verify that code. Please try again.');
+                }
               }
             },
             child: const Text('Verify'),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'location/live_location.dart';
 import 'screen/onboarding_screen.dart';
@@ -8,11 +9,20 @@ import 'screen/onboarding_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // .env is gitignored, so a fresh clone will not have it. Load it when present:
+  // the auth screens read GOOGLE_WEB_CLIENT_ID from it, and flutter_dotenv throws
+  // NotInitializedError the moment env is read without a prior load().
+  try {
+    await dotenv.load();
+  } catch (_) {
+    // Absent .env is expected and must not be fatal. Google Sign-In then falls
+    // back to the web OAuth client declared in google-services.json.
+  }
+
   try {
     // On Android the google-services gradle plugin reads
     // android/app/google-services.json at build time, so no options are passed
-    // here. This replaces the previous dotenv indirection, which crashed
-    // whenever .env was absent (it is gitignored, so every fresh clone lacked it).
+    // here.
     await Firebase.initializeApp();
     runApp(const MediMatchApp());
   } catch (e) {

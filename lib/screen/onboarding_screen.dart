@@ -186,7 +186,7 @@ class OnboardingScreen extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
-          CircleAvatar(radius: 16, backgroundColor: color.withOpacity(0.15), child: Icon(icon, color: color, size: 16)),
+          CircleAvatar(radius: 16, backgroundColor: color.withValues(alpha: 0.15), child: Icon(icon, color: color, size: 16)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

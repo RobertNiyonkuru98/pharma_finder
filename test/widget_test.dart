@@ -1,30 +1,39 @@
-// This is a basic Flutter widget test.
+// WIDGET test for the facilities screen.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Deliberately does NOT pump the whole app: the root widget starts LocationCubit
+// and Firebase, both of which need platform channels and would fail in a test.
+// Testing the screen with its Cubit injected keeps this deterministic.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pharma_finder/main.dart';
+import 'package:pharma_finder/features/facilities/presentation/cubit/facilities_cubit.dart';
+import 'package:pharma_finder/features/facilities/presentation/screens/facilities_screen.dart';
+
+Widget _harness() => BlocProvider(
+      create: (_) => FacilitiesCubit()..load(),
+      child: const MaterialApp(home: FacilitiesScreen()),
+    );
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const pharmFinder());
+  testWidgets('shows a spinner first, then the facility list', (tester) async {
+    await tester.pumpWidget(_harness());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Find care'), findsOneWidget);
+    expect(find.text('Kigali Care Pharmacy'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('renders the out-of-stock marker', (tester) async {
+    await tester.pumpWidget(_harness());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nyarutarama Clinic'), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
   });
 }

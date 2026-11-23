@@ -27,7 +27,10 @@ class _AppShellState extends State<AppShell> {
         body: IndexedStack(
           index: _index,
           children: [
-            const FacilitiesScreen(),
+            FacilitiesScreen(
+              onOpenSearch: () => setState(() => _index = 1),
+              onOpenProfile: () => setState(() => _index = 3),
+            ),
             const FacilitiesSearchScreen(),
             EmergencyScreen(user: UserProfile.current()),
             ProfileScreen(user: UserProfile.current()),

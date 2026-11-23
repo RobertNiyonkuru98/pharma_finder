@@ -76,5 +76,21 @@ void main() {
         greaterThan(1),
       );
     });
+
+    test('quick open-now filter keeps only 24-hour facilities', () async {
+      final cubit = FacilitiesCubit();
+      await cubit.load();
+
+      cubit.toggleQuickFilter(FacilityQuickFilter.openNow);
+
+      final state = cubit.state as FacilitiesLoaded;
+      expect(state.facilities, isNotEmpty);
+      expect(
+        state.facilities.every(
+          (f) => f.openingHours.toLowerCase().contains('24'),
+        ),
+        isTrue,
+      );
+    });
   });
 }

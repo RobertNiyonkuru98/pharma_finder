@@ -12,6 +12,11 @@ class Facility extends Equatable {
   final String openingHours;
   final List<String> acceptedPlans; // e.g. ['Mutuelle', 'Britam']
   final bool hasStock;
+  final double? rating;
+  final double? distanceKm;
+  final String? imageUrl;
+  final String? phone;
+  final List<String> languages;
 
   const Facility({
     required this.id,
@@ -21,6 +26,11 @@ class Facility extends Equatable {
     required this.openingHours,
     this.acceptedPlans = const [],
     this.hasStock = true,
+    this.rating,
+    this.distanceKm,
+    this.imageUrl,
+    this.phone,
+    this.languages = const [],
   });
 
   @override
@@ -32,5 +42,10 @@ class Facility extends Equatable {
     openingHours,
     acceptedPlans,
     hasStock,
+    rating,
+    distanceKm,
+    imageUrl,
+    phone,
+    languages,
   ];
 }

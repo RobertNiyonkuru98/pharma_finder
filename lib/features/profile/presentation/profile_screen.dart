@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
-import '../../services/user_profile.dart';
-import '../../screen/login_screen.dart';
+import 'package:pharma_finder/core/theme/app_colors.dart';
+import 'package:pharma_finder/services/user_profile.dart';
+import 'package:pharma_finder/screen/login_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Demo data (hard-coded until the profile passport is backed by a repository).

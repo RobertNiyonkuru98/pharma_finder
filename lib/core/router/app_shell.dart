@@ -2,17 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:pharma_finder/core/theme/app_theme.dart';
-import 'package:pharma_finder/features/emergency/presentation/screens/emergency_screen.dart';
 import 'package:pharma_finder/features/facilities/presentation/cubit/facilities_cubit.dart';
 import 'package:pharma_finder/features/facilities/presentation/screens/facilities_search_screen.dart';
 import 'package:pharma_finder/features/facilities/presentation/screens/facilities_screen.dart';
-import 'package:pharma_finder/features/profile/presentation/screens/profile_screen.dart';
+import 'package:pharma_finder/features/emergency/presentation/emergency_screen.dart';
+import 'package:pharma_finder/features/profile/presentation/profile_screen.dart';
+import 'package:pharma_finder/services/user_profile.dart';
 
-/// The four-tab frame every main screen mounts inside.
-///
-/// [FacilitiesCubit] is provided here, above the tabs, so Home and Search share
-/// one instance — search on one tab is visible on the other, which is what a
-/// user expects and what a single-Cubit-per-feature design gives you.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -30,11 +26,12 @@ class _AppShellState extends State<AppShell> {
       child: Scaffold(
         body: IndexedStack(
           index: _index,
-          children: const [
-            FacilitiesScreen(),
-            FacilitiesSearchScreen(),
-            EmergencyScreen(),
-            ProfileScreen(),
+          children: [
+            const FacilitiesScreen(),
+            const FacilitiesSearchScreen(),
+            EmergencyScreen(user: UserProfile.current()),
+            ProfileScreen(user: UserProfile.current()),
+            // ProfileScreen(),
           ],
         ),
         bottomNavigationBar: NavigationBar(

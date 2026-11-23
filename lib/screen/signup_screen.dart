@@ -5,7 +5,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import '../services/auth_helpers.dart';
-import '../services/user_profile.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -176,7 +175,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => InsuranceScreen(user: UserProfile.current()),
+            builder: (context) => InsuranceScreen(),
           ),
         );
       }
@@ -235,7 +234,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => InsuranceScreen(user: UserProfile.current()),
+            builder: (context) => InsuranceScreen(),
           ),
         );
       }

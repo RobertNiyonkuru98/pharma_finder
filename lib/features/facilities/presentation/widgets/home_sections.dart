@@ -303,10 +303,12 @@ class ProviderCard extends StatelessWidget {
     super.key,
     required this.facility,
     required this.onViewDetails,
+    this.fullWidth = false,
   });
 
   final Facility facility;
   final VoidCallback onViewDetails;
+  final bool fullWidth;
 
   bool get _hasValidPhone {
     final phone = facility.phone?.trim() ?? '';
@@ -324,7 +326,7 @@ class ProviderCard extends StatelessWidget {
         facility.type[0].toUpperCase() + facility.type.substring(1);
 
     return Container(
-      width: 300,
+      width: fullWidth ? double.infinity : 300,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,

@@ -217,25 +217,22 @@ class _FacilitiesScreenState extends State<FacilitiesScreen> {
         );
       }
 
-      return SizedBox(
-        height: 380,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: state.facilities.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 10),
-          itemBuilder: (context, i) {
-            return ProviderCard(
-              facility: state.facilities[i],
-              onViewDetails: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Facility details coming soon.'),
-                  ),
-                );
-              },
-            );
-          },
-        ),
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: state.facilities.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          return ProviderCard(
+            facility: state.facilities[i],
+            fullWidth: true,
+            onViewDetails: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Facility details coming soon.')),
+              );
+            },
+          );
+        },
       );
     }
     return const SizedBox.shrink();

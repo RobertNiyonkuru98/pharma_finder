@@ -342,13 +342,26 @@ class ProviderCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               color: AppColors.primaryTintAlt,
             ),
-            child: const Center(
-              child: Icon(
-                Icons.local_hospital_rounded,
-                color: AppColors.primary,
-                size: 34,
-              ),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: facility.imageUrl?.isNotEmpty == true
+                ? Image.asset(
+                    facility.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Center(
+                      child: Icon(
+                        Icons.local_hospital_rounded,
+                        color: AppColors.primary,
+                        size: 34,
+                      ),
+                    ),
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.local_hospital_rounded,
+                      color: AppColors.primary,
+                      size: 34,
+                    ),
+                  ),
           ),
           const SizedBox(height: 10),
           Row(

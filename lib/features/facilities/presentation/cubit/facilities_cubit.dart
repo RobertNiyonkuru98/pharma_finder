@@ -300,6 +300,7 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       languages: ['EN', 'FR', 'RW'],
       phone: '+250788555201',
       serviceTags: ['prescription_refill', 'over_the_counter'],
+      imageUrl: 'assets/images/facilities/kigali_care_pharmacy.png',
     ),
     Facility(
       id: 'f2',
@@ -314,6 +315,7 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       languages: ['EN', 'RW'],
       phone: '+250788303030',
       serviceTags: ['maternal_care', 'emergency_triage'],
+      imageUrl: 'assets/images/facilities/kibagabaga_hospital.png',
     ),
     Facility(
       id: 'f3',
@@ -327,6 +329,7 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       rating: 4.1,
       distanceKm: 3.6,
       serviceTags: ['prescription_refill', 'maternal_care'],
+      imageUrl: 'assets/images/facilities/nyarutarama_clinic.png',
     ),
     Facility(
       id: 'f4',
@@ -341,6 +344,7 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       languages: ['EN', 'FR'],
       phone: '+250788123456',
       serviceTags: ['prescription_refill', 'over_the_counter'],
+      imageUrl: 'assets/images/facilities/pharmacie_conseil.png',
     ),
   ];
 }

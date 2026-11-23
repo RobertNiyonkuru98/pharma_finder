@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'core/location/location_store.dart';
 import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
 
@@ -24,6 +26,13 @@ Future<void> main() async {
     // android/app/google-services.json at build time, so no options are passed
     // here.
     await Firebase.initializeApp();
+
+    // Restore the last known position before the first frame so the GPS card
+    // and the profile's "Current Base" have data on a warm start.
+    if (FirebaseAuth.instance.currentUser != null) {
+      await LocationStore.load();
+    }
+
     runApp(const MediMatchApp());
   } catch (e) {
     debugPrint('Firebase initialization error: $e');

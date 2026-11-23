@@ -1,57 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:pharma_finder/core/firestore/user_repository.dart';
+import 'package:pharma_finder/core/location/location_store.dart';
+import 'package:pharma_finder/features/location/live_location.dart';
+import 'package:pharma_finder/features/profile/presentation/screens/edit_profile_screen.dart';
+import 'package:pharma_finder/services/auth_helpers.dart';
 import 'package:pharma_finder/services/user_profile.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pharma_finder/core/theme/app_colors.dart';
 
 // ---------------------------------------------------------------------------
-// Demo data (hard-coded until patient records and directories are wired up).
+// Emergency directories (static until the directory is served from Firestore).
 // ---------------------------------------------------------------------------
-
-class _ResponderProfile {
-  const _ResponderProfile({
-    required this.fullName,
-    required this.bloodType,
-    required this.allergy,
-    required this.coverage,
-    required this.coverageNumber,
-    required this.nextOfKin,
-    required this.nextOfKinPhone,
-    required this.nextOfKinPhoneLabel,
-  });
-
-  final String fullName;
-  final String bloodType;
-  final String allergy;
-  final String coverage;
-  final String coverageNumber;
-  final String nextOfKin;
-  final String nextOfKinPhone;
-  final String nextOfKinPhoneLabel;
-
-  /// Same demo medical record, shown for the signed-in account's name.
-  _ResponderProfile forUser(String fullName) => _ResponderProfile(
-    fullName: fullName,
-    bloodType: bloodType,
-    allergy: allergy,
-    coverage: coverage,
-    coverageNumber: coverageNumber,
-    nextOfKin: nextOfKin,
-    nextOfKinPhone: nextOfKinPhone,
-    nextOfKinPhoneLabel: nextOfKinPhoneLabel,
-  );
-}
-
-const _ResponderProfile _demoResponder = _ResponderProfile(
-  fullName: 'Sarah Mukamana',
-  bloodType: 'O+',
-  allergy: 'Penicillin (Severe)',
-  coverage: 'RSSB / RAMA',
-  coverageNumber: '#9842-RW',
-  nextOfKin: 'Jean-Paul M. (Spouse)',
-  nextOfKinPhone: 'tel:+250788443210',
-  nextOfKinPhoneLabel: '+250 788 443 210',
-);
 
 class _EmergencyService {
   const _EmergencyService({
@@ -274,9 +235,7 @@ class EmergencyScreen extends StatelessWidget {
               const SizedBox(height: 24),
               const _ServicesDirectory(),
               const SizedBox(height: 24),
-              _FirstResponderIdCard(
-                profile: _demoResponder.forUser(user.fullName),
-              ),
+              _FirstResponderIdCard(user: user),
               const SizedBox(height: 24),
               const _TraumaCentersSection(),
               const SizedBox(height: 24),
@@ -576,10 +535,50 @@ class _EmergencyTopBar extends StatelessWidget {
 class _LiveGpsCard extends StatelessWidget {
   const _LiveGpsCard();
 
-  static const String _coordinates = '1.9536° S, 30.0605° E';
+  @override
+  Widget build(BuildContext context) {
+    // The cubit is provided at app root. Guard the lookup so the card still
+    // renders in tests or previews that mount the screen without one.
+    final cubit = _maybeLocationCubit(context);
+    if (cubit == null) {
+      return const _LiveGpsBody(state: null);
+    }
 
-  Future<void> _copyCoordinates(BuildContext context) async {
-    await Clipboard.setData(const ClipboardData(text: _coordinates));
+    return BlocBuilder<LocationCubit, LocationState>(
+      builder: (context, state) => _LiveGpsBody(
+        state: state,
+        onRefresh: () =>
+            context.read<LocationCubit>().requestAndStreamLocation(),
+      ),
+    );
+  }
+}
+
+LocationCubit? _maybeLocationCubit(BuildContext context) {
+  try {
+    return context.read<LocationCubit>();
+  } catch (_) {
+    return null;
+  }
+}
+
+String _savedLabel(DateTime? savedAt) {
+  if (savedAt == null) return 'recently';
+  final diff = DateTime.now().difference(savedAt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+  if (diff.inDays < 1) return '${diff.inHours} h ago';
+  return '${diff.inDays} d ago';
+}
+
+class _LiveGpsBody extends StatelessWidget {
+  const _LiveGpsBody({required this.state, this.onRefresh});
+
+  final LocationState? state;
+  final VoidCallback? onRefresh;
+
+  Future<void> _copyCoordinates(BuildContext context, String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -593,6 +592,30 @@ class _LiveGpsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loaded = state is LocationLoaded ? state as LocationLoaded : null;
+    final cached = LocationStore.cached;
+    final hasFix = loaded != null || cached.hasFix;
+
+    final latitude =
+        loaded?.position.latitude ?? (cached.hasFix ? cached.latitude : null);
+    final longitude =
+        loaded?.position.longitude ?? (cached.hasFix ? cached.longitude : null);
+    final accuracy = loaded?.position.accuracy ?? cached.accuracy;
+    final placeName = loaded?.placeName ??
+        (cached.hasFix ? cached.placeName : 'Rwanda');
+
+    final coordinates = latitude == null || longitude == null
+        ? 'No GPS fix yet'
+        : '${latitude.abs().toStringAsFixed(4)}° S, '
+            '${longitude.toStringAsFixed(4)}° E';
+
+    final error = state is LocationError ? (state as LocationError).message : null;
+    final subtitle = error ??
+        (hasFix
+            ? 'Accurate to ${accuracy.round()} m • Saved '
+                '${_savedLabel(loaded != null ? DateTime.now() : cached.savedAt)}'
+            : 'Location sharing is off — tap Refresh to locate you.');
+
     return _CardShell(
       color: AppColors.surfaceTint,
       child: Column(
@@ -616,8 +639,10 @@ class _LiveGpsCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const _Pill(
-                label: 'Accurate to 4m',
+              _Pill(
+                label: hasFix
+                    ? 'Accurate to ${accuracy.round()}m'
+                    : 'No GPS fix',
                 icon: Icons.my_location_rounded,
                 fontSize: 10,
               ),
@@ -634,9 +659,11 @@ class _LiveGpsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Kigali, Nyarugenge District',
-            style: TextStyle(
+          Text(
+            placeName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
               fontSize: 23,
               fontWeight: FontWeight.w800,
               height: 1.15,
@@ -644,9 +671,11 @@ class _LiveGpsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          const Text(
-            'KN 4 Ave, near Roundabout • Cell: Kiyovu',
-            style: TextStyle(
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
               fontSize: 13,
               height: 1.35,
               color: AppColors.textMuted,
@@ -667,14 +696,14 @@ class _LiveGpsCard extends StatelessWidget {
                   color: AppColors.primaryGreen,
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      _coordinates,
+                      coordinates,
                       maxLines: 1,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -684,7 +713,9 @@ class _LiveGpsCard extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => _copyCoordinates(context),
+                  onPressed: latitude == null || longitude == null
+                      ? null
+                      : () => _copyCoordinates(context, coordinates),
                   icon: const Icon(Icons.copy_rounded, size: 15),
                   label: const Text(
                     'Copy Text',
@@ -702,6 +733,27 @@ class _LiveGpsCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text(
+                'Refresh location',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryGreen,
+                backgroundColor: AppColors.white,
+                disabledForegroundColor: AppColors.textMuted,
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+              ),
             ),
           ),
         ],
@@ -950,13 +1002,103 @@ class _EmergencyServiceRow extends StatelessWidget {
 // First responder ID.
 // ---------------------------------------------------------------------------
 
-class _FirstResponderIdCard extends StatelessWidget {
-  const _FirstResponderIdCard({required this.profile});
+class _FirstResponderIdCard extends StatefulWidget {
+  const _FirstResponderIdCard({required this.user});
 
-  final _ResponderProfile profile;
+  final UserProfile user;
+
+  @override
+  State<_FirstResponderIdCard> createState() => _FirstResponderIdCardState();
+}
+
+class _FirstResponderIdCardState extends State<_FirstResponderIdCard> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  /// Firestore is the source of truth; the signed-in account fills the name in
+  /// when the document has not been written yet.
+  Future<Map<String, dynamic>> _load() async {
+    final data = <String, dynamic>{'fullName': widget.user.fullName};
+    final uid = UserRepository.currentUid;
+
+    if (uid != null) {
+      final remote = await UserRepository.fetchProfile(uid);
+      if (remote != null) {
+        for (final entry in remote.entries) {
+          final value = entry.value;
+          if (value == null) continue;
+          if (value is String && value.trim().isEmpty) continue;
+          data[entry.key] = value;
+        }
+      }
+    }
+    return data;
+  }
+
+  Future<void> _openEdit(Map<String, dynamic> data) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => EditProfileScreen(initialProfile: data),
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() => _future = _load());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _FirstResponderSkeleton();
+        }
+        final data =
+            snapshot.data ?? <String, dynamic>{'fullName': widget.user.fullName};
+        return _FirstResponderCard(
+          data: data,
+          onEdit: () => _openEdit(data),
+        );
+      },
+    );
+  }
+}
+
+String _responderText(Map<String, dynamic> data, String key) {
+  final value = data[key]?.toString().trim() ?? '';
+  return value.isEmpty ? 'Not set' : value;
+}
+
+class _FirstResponderCard extends StatelessWidget {
+  const _FirstResponderCard({required this.data, required this.onEdit});
+
+  final Map<String, dynamic> data;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final fullName = _responderText(data, 'fullName');
+    final bloodType = _responderText(data, 'bloodType');
+    final allergy = _responderText(data, 'allergy');
+    final coverage = _responderText(data, 'coverage');
+    final coverageNumber = _responderText(data, 'coverageNumber');
+    final nextOfKin = _responderText(data, 'nextOfKin');
+
+    final kinPhoneRaw = data['nextOfKinPhone']?.toString().trim() ?? '';
+    final kinPhoneDigits = kinPhoneRaw.replaceFirst(RegExp(r'^tel:'), '');
+    final kinPhoneLabel = kinPhoneDigits.isEmpty
+        ? 'Not set'
+        : formatRwandanPhone(kinPhoneDigits);
+    final kinPhoneUri = kinPhoneDigits.isEmpty
+        ? null
+        : 'tel:$kinPhoneDigits';
+
     return _CardShell(
       color: AppColors.surfaceTint,
       child: Column(
@@ -982,7 +1124,19 @@ class _FirstResponderIdCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              IconButton(
+                onPressed: onEdit,
+                tooltip: 'Edit profile',
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                color: AppColors.primaryGreen,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+              ),
+              const SizedBox(width: 4),
               const _Pill(
                 label: 'Verified Patient',
                 background: AppColors.mintBadge,
@@ -1011,7 +1165,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                           const _MiniLabel('Patient Full Name'),
                           const SizedBox(height: 4),
                           Text(
-                            profile.fullName,
+                            fullName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1039,7 +1193,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Text(
-                            profile.bloodType,
+                            bloodType,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -1064,7 +1218,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                           labelIcon: Icons.warning_amber_rounded,
                           children: <Widget>[
                             Text(
-                              profile.allergy,
+                              allergy,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -1085,7 +1239,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                           labelIcon: Icons.verified_rounded,
                           children: <Widget>[
                             Text(
-                              profile.coverage,
+                              coverage,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -1096,7 +1250,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              profile.coverageNumber,
+                              coverageNumber,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -1121,7 +1275,7 @@ class _FirstResponderIdCard extends StatelessWidget {
                           const _MiniLabel('Next of Kin / ICE Contact'),
                           const SizedBox(height: 4),
                           Text(
-                            profile.nextOfKin,
+                            nextOfKin,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1135,10 +1289,14 @@ class _FirstResponderIdCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Material(
-                      color: AppColors.primaryGreen,
+                      color: kinPhoneUri == null
+                          ? AppColors.grayTint
+                          : AppColors.primaryGreen,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                       child: InkWell(
-                        onTap: () => _openUri(context, profile.nextOfKinPhone),
+                        onTap: kinPhoneUri == null
+                            ? null
+                            : () => _openUri(context, kinPhoneUri),
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1148,18 +1306,22 @@ class _FirstResponderIdCard extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
-                              const Icon(
+                              Icon(
                                 Icons.phone_rounded,
                                 size: 13,
-                                color: AppColors.white,
+                                color: kinPhoneUri == null
+                                    ? AppColors.textMuted
+                                    : AppColors.white,
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                profile.nextOfKinPhoneLabel,
-                                style: const TextStyle(
+                                kinPhoneLabel,
+                                style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
-                                  color: AppColors.white,
+                                  color: kinPhoneUri == null
+                                      ? AppColors.textMuted
+                                      : AppColors.white,
                                 ),
                               ),
                             ],
@@ -1169,6 +1331,52 @@ class _FirstResponderIdCard extends StatelessWidget {
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirstResponderSkeleton extends StatelessWidget {
+  const _FirstResponderSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget bar(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.grayTint,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    return _CardShell(
+      color: AppColors.surfaceTint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          bar(180, 20),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(AppRadius.tile),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                bar(140, 16),
+                const SizedBox(height: 12),
+                bar(double.infinity, 14),
+                const SizedBox(height: 12),
+                bar(double.infinity, 14),
+                const SizedBox(height: 12),
+                bar(160, 14),
               ],
             ),
           ),

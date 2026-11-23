@@ -1,12 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:pharma_finder/core/firestore/user_repository.dart';
+import 'package:pharma_finder/core/location/location_store.dart';
 import 'package:pharma_finder/core/theme/app_colors.dart';
+import 'package:pharma_finder/features/about/presentation/screens/about_screen.dart';
+import 'package:pharma_finder/features/insurance/domain/entities/insurance_plan.dart';
+import 'package:pharma_finder/features/profile/presentation/screens/edit_profile_screen.dart';
+import 'package:pharma_finder/services/auth_helpers.dart';
 import 'package:pharma_finder/services/user_profile.dart';
 import 'package:pharma_finder/screen/login_screen.dart';
 
 // ---------------------------------------------------------------------------
-// Demo data (hard-coded until the profile passport is backed by a repository).
+// Settings rows.
 // ---------------------------------------------------------------------------
 
 class _SettingsItem {
@@ -16,6 +22,7 @@ class _SettingsItem {
     required this.icon,
     this.isDanger = false,
     this.hasHealthDot = false,
+    this.isAbout = false,
   });
 
   final String title;
@@ -23,37 +30,50 @@ class _SettingsItem {
   final IconData icon;
   final bool isDanger;
   final bool hasHealthDot;
+  final bool isAbout;
 }
 
-const List<_SettingsItem> _settingsItems = <_SettingsItem>[
-  _SettingsItem(
-    title: 'Duty Roster Alerts',
-    subtitle: 'Night pharmacy & urgent clinic schedules',
-    icon: Icons.notifications_active_rounded,
-  ),
-  _SettingsItem(
-    title: 'GPS & District Permissions',
-    subtitle: 'Always while using app (Precise)',
-    icon: Icons.gps_fixed_rounded,
-  ),
-  _SettingsItem(
-    title: 'Health & Privacy Passport',
-    subtitle: 'Yellow fever, allergies & blood group',
-    icon: Icons.badge_rounded,
-    hasHealthDot: true,
-  ),
-  _SettingsItem(
-    title: 'SAMU Hotline & Help Desk',
-    subtitle: 'Toll-free 112 ambulance guide & FAQs',
-    icon: Icons.help_outline_rounded,
-    isDanger: true,
-  ),
-  _SettingsItem(
-    title: 'About MediMatch Rwanda',
-    subtitle: 'v1.2.0 • Kigali Health Tech Initiative',
-    icon: Icons.info_outline_rounded,
-  ),
-];
+/// The About row's subtitle comes from `app_config/about` so the release
+/// notes and tagline can change without shipping a new build.
+List<_SettingsItem> _settingsItemsFor(Map<String, dynamic>? about) {
+  final version = about?['version']?.toString().trim() ?? '';
+  final tagline = about?['tagline']?.toString().trim() ?? '';
+  final aboutSubtitle = <String>[
+    if (version.isNotEmpty) 'v$version',
+    if (tagline.isNotEmpty) tagline,
+  ].join(' • ');
+
+  return <_SettingsItem>[
+    const _SettingsItem(
+      title: 'Duty Roster Alerts',
+      subtitle: 'Night pharmacy & urgent clinic schedules',
+      icon: Icons.notifications_active_rounded,
+    ),
+    const _SettingsItem(
+      title: 'GPS & District Permissions',
+      subtitle: 'Always while using app (Precise)',
+      icon: Icons.gps_fixed_rounded,
+    ),
+    const _SettingsItem(
+      title: 'Health & Privacy Passport',
+      subtitle: 'Yellow fever, allergies & blood group',
+      icon: Icons.badge_rounded,
+      hasHealthDot: true,
+    ),
+    const _SettingsItem(
+      title: 'SAMU Hotline & Help Desk',
+      subtitle: 'Toll-free 112 ambulance guide & FAQs',
+      icon: Icons.help_outline_rounded,
+      isDanger: true,
+    ),
+    _SettingsItem(
+      title: 'About MediMatch Rwanda',
+      subtitle: aboutSubtitle.isEmpty ? 'MediMatch Rwanda' : aboutSubtitle,
+      icon: Icons.info_outline_rounded,
+      isAbout: true,
+    ),
+  ];
+}
 
 TextStyle _capsStyle({Color color = AppColors.textMuted}) => TextStyle(
   fontSize: 9.5,
@@ -61,6 +81,42 @@ TextStyle _capsStyle({Color color = AppColors.textMuted}) => TextStyle(
   letterSpacing: 0.5,
   color: color,
 );
+
+String _profileText(
+  Map<String, dynamic> data,
+  String key, {
+  String fallback = 'Not set',
+}) {
+  final value = data[key]?.toString().trim() ?? '';
+  return value.isEmpty ? fallback : value;
+}
+
+String _initialsOf(String name) {
+  final words = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+  if (words.isEmpty) return 'MM';
+
+  String letterOf(String word) {
+    final letters = word.replaceAll(RegExp(r'[^A-Za-z]'), '');
+    return letters.isEmpty ? '' : letters[0].toUpperCase();
+  }
+
+  final first = letterOf(words.first);
+  final last = words.length > 1 ? letterOf(words.last) : '';
+  final result = '$first$last';
+  return result.isEmpty ? 'MM' : result;
+}
+
+InsurancePlan? _planNamed(String name) {
+  for (final plan in InsurancePlan.defaults) {
+    if (plan.name == name) return plan;
+  }
+  return null;
+}
+
 
 // ---------------------------------------------------------------------------
 // Screen.
@@ -76,12 +132,69 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+/// Firestore profile plus the optional `app_config/about` document.
+class _ProfileBundle {
+  const _ProfileBundle({required this.profile, this.about});
+
+  final Map<String, dynamic> profile;
+  final Map<String, dynamic>? about;
+}
+
 class _ProfileScreenState extends State<ProfileScreen> {
   static const List<int> _radiusStops = <int>[1, 5, 10, 25];
 
   int _radiusIndex = 1;
   bool _showOpenFirst = true;
   bool _insuranceOnly = true;
+
+  late Future<_ProfileBundle> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  /// Firestore values win, the signed-in account fills the gaps, and a failed
+  /// read falls back to the account-only snapshot instead of blocking the
+  /// screen.
+  Future<_ProfileBundle> _load() async {
+    final profile = <String, dynamic>{
+      'fullName': widget.user.fullName,
+      'email': widget.user.email,
+      'phone': widget.user.phone,
+      'photoUrl': widget.user.photoUrl,
+    };
+
+    final uid = UserRepository.currentUid;
+    if (uid != null) {
+      final remote = await UserRepository.fetchProfile(uid);
+      if (remote != null) {
+        for (final entry in remote.entries) {
+          final value = entry.value;
+          if (value == null) continue;
+          if (value is String && value.trim().isEmpty) continue;
+          profile[entry.key] = value;
+        }
+      }
+    }
+
+    final about = await UserRepository.fetchAbout();
+    return _ProfileBundle(profile: profile, about: about);
+  }
+
+  _ProfileBundle get _fallbackBundle => _ProfileBundle(
+    profile: <String, dynamic>{
+      'fullName': widget.user.fullName,
+      'email': widget.user.email,
+      'phone': widget.user.phone,
+      'photoUrl': widget.user.photoUrl,
+    },
+  );
+
+  void _reload() {
+    setState(() => _future = _load());
+  }
 
   void _comingSoon(String label) {
     ScaffoldMessenger.of(context)
@@ -92,6 +205,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           duration: const Duration(seconds: 2),
         ),
       );
+  }
+
+  Future<void> _openEditProfile(Map<String, dynamic> profile) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => EditProfileScreen(initialProfile: profile),
+      ),
+    );
+    if (saved == true && mounted) _reload();
+  }
+
+  void _openAbout(Map<String, dynamic>? about) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => AboutScreen(about: about)),
+    );
   }
 
   Future<void> _confirmLogout() async {
@@ -130,6 +258,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
+    // Drop the previous account's cached fix so the next sign-in starts fresh.
+    LocationStore.clear();
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
@@ -146,59 +276,146 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openSettingsItem(_SettingsItem item, _ProfileBundle bundle) {
+    if (item.isAbout) {
+      _openAbout(bundle.about);
+      return;
+    }
+    _openPlaceholder(item.title);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.pagePadding,
-            12,
-            AppSpacing.pagePadding,
-            28,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _ProfileTopBar(
-                onNotifications: () => _comingSoon('Notification center'),
+        child: FutureBuilder<_ProfileBundle>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const _ProfileLoadingSkeleton();
+            }
+            final bundle = snapshot.data ?? _fallbackBundle;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.pagePadding,
+                12,
+                AppSpacing.pagePadding,
+                28,
               ),
-              const SizedBox(height: 16),
-              _IdentityCard(
-                user: widget.user,
-                onEdit: () => _openPlaceholder('Edit profile'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _ProfileTopBar(
+                    onNotifications: () => _comingSoon('Notification center'),
+                  ),
+                  const SizedBox(height: 16),
+                  _IdentityCard(
+                    data: bundle.profile,
+                    onEdit: () => _openEditProfile(bundle.profile),
+                  ),
+                  const SizedBox(height: 24),
+                  _InsurancePolicySection(
+                    coverage: _profileText(bundle.profile, 'coverage'),
+                    coverageNumber: _profileText(
+                      bundle.profile,
+                      'coverageNumber',
+                    ),
+                    onChangePolicy: () =>
+                        _comingSoon('Changing insurance policy'),
+                    onViewCard: () => _openPlaceholder('Digital insurance card'),
+                  ),
+                  const SizedBox(height: 24),
+                  _LocationDiscoverySection(
+                    baseLabel: LocationStore.cached.hasFix
+                        ? LocationStore.cached.placeName
+                        : 'Kigali • Nyarugenge / Gasabo',
+                    radiusStops: _radiusStops,
+                    radiusIndex: _radiusIndex,
+                    onRadiusChanged: (index) =>
+                        setState(() => _radiusIndex = index),
+                    showOpenFirst: _showOpenFirst,
+                    onShowOpenFirstChanged: (value) =>
+                        setState(() => _showOpenFirst = value),
+                    insuranceOnly: _insuranceOnly,
+                    onInsuranceOnlyChanged: (value) =>
+                        setState(() => _insuranceOnly = value),
+                    onChangeBase: () => _comingSoon('Changing your base district'),
+                  ),
+                  const SizedBox(height: 24),
+                  _SettingsSupportSection(
+                    items: _settingsItemsFor(bundle.about),
+                    onOpenItem: (item) => _openSettingsItem(item, bundle),
+                  ),
+                  const SizedBox(height: 24),
+                  _BottomActions(
+                    onSwitchAccount: () => _comingSoon('Switching accounts'),
+                    onLogout: _confirmLogout,
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              _InsurancePolicySection(
-                onChangePolicy: () => _comingSoon('Changing insurance policy'),
-                onViewCard: () => _openPlaceholder('Digital insurance card'),
-              ),
-              const SizedBox(height: 24),
-              _LocationDiscoverySection(
-                radiusStops: _radiusStops,
-                radiusIndex: _radiusIndex,
-                onRadiusChanged: (index) =>
-                    setState(() => _radiusIndex = index),
-                showOpenFirst: _showOpenFirst,
-                onShowOpenFirstChanged: (value) =>
-                    setState(() => _showOpenFirst = value),
-                insuranceOnly: _insuranceOnly,
-                onInsuranceOnlyChanged: (value) =>
-                    setState(() => _insuranceOnly = value),
-                onChangeBase: () => _comingSoon('Changing your base district'),
-              ),
-              const SizedBox(height: 24),
-              _SettingsSupportSection(onOpenItem: _openPlaceholder),
-              const SizedBox(height: 24),
-              _BottomActions(
-                onSwitchAccount: () => _comingSoon('Switching accounts'),
-                onLogout: _confirmLogout,
-              ),
-            ],
-          ),
+            );
+          },
         ),
+      ),
+    );
+  }
+}
+
+/// Static placeholder shown while the profile document loads. Kept
+/// animation-free so tests can settle.
+class _ProfileLoadingSkeleton extends StatelessWidget {
+  const _ProfileLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget bar(double widthFactor, double height) => FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: widthFactor,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.grayTint,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        12,
+        AppSpacing.pagePadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.cardPadding),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                bar(0.55, 18),
+                const SizedBox(height: 10),
+                bar(0.75, 12),
+                const SizedBox(height: 10),
+                bar(0.4, 12),
+                const SizedBox(height: 22),
+                bar(0.9, 12),
+                const SizedBox(height: 22),
+                bar(0.8, 12),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -321,13 +538,21 @@ class _RoundIconButton extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.user, required this.onEdit});
+  const _IdentityCard({required this.data, required this.onEdit});
 
-  final UserProfile user;
+  final Map<String, dynamic> data;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final fullName = _profileText(data, 'fullName', fallback: 'MediMatch member');
+    final email = _profileText(data, 'email', fallback: '');
+    final rawPhone = _profileText(data, 'phone', fallback: '');
+    final photoUrl = _profileText(data, 'photoUrl', fallback: '');
+    final accountLine = email.isEmpty ? 'Verified MediMatch member' : email;
+    final phone = rawPhone.isEmpty ? '' : formatRwandanPhone(rawPhone);
+    final initials = _initialsOf(fullName);
+
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -362,7 +587,7 @@ class _IdentityCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _ProfileAvatar(user: user),
+                    _ProfileAvatar(photoUrl: photoUrl, initials: initials),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -372,7 +597,7 @@ class _IdentityCard extends StatelessWidget {
                             children: <Widget>[
                               Flexible(
                                 child: Text(
-                                  user.fullName,
+                                  fullName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -392,7 +617,7 @@ class _IdentityCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            user.accountLine,
+                            accountLine,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -401,7 +626,7 @@ class _IdentityCard extends StatelessWidget {
                               color: AppColors.textMuted,
                             ),
                           ),
-                          if (user.hasPhone) ...<Widget>[
+                          if (phone.isNotEmpty) ...<Widget>[
                             const SizedBox(height: 8),
                             Row(
                               children: <Widget>[
@@ -413,7 +638,7 @@ class _IdentityCard extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
-                                    user.formattedPhone,
+                                    phone,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -488,13 +713,13 @@ class _IdentityCard extends StatelessWidget {
 }
 
 class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar({required this.user});
+  const _ProfileAvatar({required this.photoUrl, required this.initials});
 
-  final UserProfile user;
+  final String photoUrl;
+  final String initials;
 
   @override
   Widget build(BuildContext context) {
-    final photoUrl = user.photoUrl;
     return SizedBox(
       width: 96,
       height: 96,
@@ -502,17 +727,17 @@ class _ProfileAvatar extends StatelessWidget {
         children: <Widget>[
           Positioned.fill(
             child: ClipOval(
-              child: photoUrl == null
-                  ? _AvatarFallback(initials: user.initials)
+              child: photoUrl.isEmpty
+                  ? _AvatarFallback(initials: initials)
                   : Image.network(
                       photoUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
-                          _AvatarFallback(initials: user.initials),
+                          _AvatarFallback(initials: initials),
                       loadingBuilder: (context, child, progress) =>
                           progress == null
                           ? child
-                          : _AvatarFallback(initials: user.initials),
+                          : _AvatarFallback(initials: initials),
                     ),
             ),
           ),
@@ -607,15 +832,20 @@ class _SectionHeader extends StatelessWidget {
 
 class _InsurancePolicySection extends StatelessWidget {
   const _InsurancePolicySection({
+    required this.coverage,
+    required this.coverageNumber,
     required this.onChangePolicy,
     required this.onViewCard,
   });
 
+  final String coverage;
+  final String coverageNumber;
   final VoidCallback onChangePolicy;
   final VoidCallback onViewCard;
 
   @override
   Widget build(BuildContext context) {
+    final plan = _planNamed(coverage);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -669,12 +899,12 @@ class _InsurancePolicySection extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            const Flexible(
+                            Flexible(
                               child: Text(
-                                'RSSB (RAMA)',
+                                coverage,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.textDark,
@@ -705,11 +935,11 @@ class _InsurancePolicySection extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 3),
-                        const Text(
-                          'Rwanda Social Security Board',
+                        Text(
+                          plan?.category ?? 'Coverage on file',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 11.5,
                             color: AppColors.textMuted,
                           ),
@@ -745,11 +975,11 @@ class _InsurancePolicySection extends StatelessWidget {
                             style: _capsStyle(),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'RSSB-9842-RW',
+                          Text(
+                            coverageNumber,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textDark,
@@ -847,6 +1077,7 @@ class _InsurancePolicySection extends StatelessWidget {
 
 class _LocationDiscoverySection extends StatelessWidget {
   const _LocationDiscoverySection({
+    required this.baseLabel,
     required this.radiusStops,
     required this.radiusIndex,
     required this.onRadiusChanged,
@@ -857,6 +1088,7 @@ class _LocationDiscoverySection extends StatelessWidget {
     required this.onChangeBase,
   });
 
+  final String baseLabel;
   final List<int> radiusStops;
   final int radiusIndex;
   final ValueChanged<int> onRadiusChanged;
@@ -902,11 +1134,11 @@ class _LocationDiscoverySection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
+                        const Text(
                           'Current Base',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -916,12 +1148,12 @@ class _LocationDiscoverySection extends StatelessWidget {
                             color: AppColors.textMuted,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Kigali • Nyarugenge / Gasabo',
+                          baseLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textDark,
@@ -1138,9 +1370,13 @@ class _PreferenceToggle extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _SettingsSupportSection extends StatelessWidget {
-  const _SettingsSupportSection({required this.onOpenItem});
+  const _SettingsSupportSection({
+    required this.items,
+    required this.onOpenItem,
+  });
 
-  final ValueChanged<String> onOpenItem;
+  final List<_SettingsItem> items;
+  final ValueChanged<_SettingsItem> onOpenItem;
 
   @override
   Widget build(BuildContext context) {
@@ -1161,8 +1397,8 @@ class _SettingsSupportSection extends StatelessWidget {
           ),
           child: Column(
             children: <Widget>[
-              for (final item in _settingsItems)
-                _SettingsRow(item: item, onTap: () => onOpenItem(item.title)),
+              for (final item in items)
+                _SettingsRow(item: item, onTap: () => onOpenItem(item)),
             ],
           ),
         ),

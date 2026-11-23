@@ -31,7 +31,9 @@ void main() {
     expect(find.text('Sarah Mukamana'), findsOneWidget);
     expect(find.text('sarah@example.rw'), findsOneWidget);
     expect(find.text('+250 788 123 456'), findsOneWidget);
-    expect(find.text('RSSB-9842-RW'), findsOneWidget);
+    // No Firestore document in tests, so policy fields show the fallback.
+    expect(find.text('My Insurance Policy'), findsOneWidget);
+    expect(find.text('Not set'), findsNWidgets(2));
     expect(find.text('Settings & Support'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

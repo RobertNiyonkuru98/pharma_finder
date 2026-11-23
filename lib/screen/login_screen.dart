@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import 'signup_screen.dart';
+import '../core/firestore/user_repository.dart';
+import '../core/location/location_store.dart';
 import '../services/auth_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -66,6 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
           verificationCompleted: (cred) async {
             try {
               await FirebaseAuth.instance.signInWithCredential(cred);
+              await UserRepository.recordLogin();
+              await LocationStore.load();
               _goNext('Welcome back to MediMatch!');
             } on FirebaseAuthException catch (e) {
               if (mounted) _msg(friendlyAuthError(e, mode: 'phone'));
@@ -84,6 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
           email: contact,
           password: _passCtrl.text.trim(),
         );
+        await UserRepository.recordLogin();
+        await LocationStore.load();
         _goNext('Welcome back to MediMatch!');
       }
     } on FirebaseAuthException catch (e) {
@@ -117,17 +122,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final cred = GoogleAuthProvider.credential(idToken: idToken);
-      final res = await FirebaseAuth.instance.signInWithCredential(cred);
+      await FirebaseAuth.instance.signInWithCredential(cred);
 
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(res.user!.uid)
-          .set({
-            'fullName': res.user!.displayName ?? user.displayName ?? '',
-            'email': res.user!.email ?? user.email,
-            'lastLogin': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true))
-          .catchError((e) => debugPrint('Firestore sync: $e'));
+      await UserRepository.recordLogin();
+      await LocationStore.load();
 
       _goNext('Signed in with Google!');
     } on FirebaseAuthException catch (e) {
@@ -171,6 +169,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   smsCode: otpCtrl.text.trim(),
                 );
                 await FirebaseAuth.instance.signInWithCredential(cred);
+                await UserRepository.recordLogin();
+                await LocationStore.load();
                 _goNext('Welcome back to MediMatch!');
               } on FirebaseAuthException catch (e) {
                 if (mounted) {

@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+
+import '../../core/location/location_store.dart';
 
 // Main States
 abstract class LocationState {}
@@ -53,6 +56,29 @@ class LocationCubit extends Cubit<LocationState> {
         return;
       }
 
+      // Seed one fix up front so the UI has something to show even when the
+      // stream takes a while to deliver its first update.
+      try {
+        final first = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 12),
+          ),
+        );
+        final firstName = await _resolvePlaceName(first);
+        await LocationStore.save(
+          placeName: firstName,
+          latitude: first.latitude,
+          longitude: first.longitude,
+          accuracy: first.accuracy,
+        );
+        if (!isClosed) {
+          emit(LocationLoaded(position: first, placeName: firstName));
+        }
+      } catch (error) {
+        debugPrint('Initial location fix failed: $error');
+      }
+
       // Kick off the stream. Each fix updates state → BlocBuilder re-renders.
       await _posSub?.cancel();
       _posSub =
@@ -63,6 +89,13 @@ class LocationCubit extends Cubit<LocationState> {
             ),
           ).listen((pos) async {
             final name = await _resolvePlaceName(pos);
+            await LocationStore.save(
+              placeName: name,
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+              accuracy: pos.accuracy,
+            );
+            if (isClosed) return;
             emit(LocationLoaded(position: pos, placeName: name));
           }, onError: (e) => emit(LocationError('Stream error: $e')));
     } catch (e) {

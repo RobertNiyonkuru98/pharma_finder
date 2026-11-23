@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
+import '../core/location/location_store.dart';
 import '../services/auth_helpers.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -164,11 +165,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
               'email': userCred.user!.email ?? googleUser.email,
               'phone': userCred.user!.phoneNumber ?? '',
               'createdAt': FieldValue.serverTimestamp(),
+              'lastLogin': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true))
             .timeout(const Duration(seconds: 10));
       } catch (firestoreError) {
         debugPrint('Firestore profile sync warning: $firestoreError');
       }
+
+      await LocationStore.load();
 
       if (mounted) {
         _showMsg('Signed in with Google! Welcome to MediMatch.');
@@ -223,11 +227,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
             'phone': phone,
             'email': email,
             'createdAt': FieldValue.serverTimestamp(),
+            'lastLogin': FieldValue.serverTimestamp(),
           })
           .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('Firestore saving error: $e');
     } finally {
+      await LocationStore.load();
       if (mounted) {
         setState(() => _isLoading = false);
         _showMsg('Account created! Welcome to MediMatch.');

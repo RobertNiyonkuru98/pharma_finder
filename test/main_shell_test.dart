@@ -48,7 +48,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(shellIndex(tester), MainShell.sosTab);
-    expect(find.text('Kigali, Nyarugenge District'), findsOneWidget);
+    // No location fix in tests, so the GPS card falls back to the country.
+    expect(find.text('Rwanda'), findsOneWidget);
     expect(find.text('CALL 112 (AMBULANCE)'), findsOneWidget);
     // The first responder record carries the signed-in account's name.
     expect(find.text('Sarah Mukamana'), findsOneWidget);

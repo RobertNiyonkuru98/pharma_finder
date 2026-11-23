@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pharma_finder/services/user_profile.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../core/theme/app_colors.dart';
-import '../../services/user_profile.dart';
+import 'package:pharma_finder/core/theme/app_colors.dart';
 
 // ---------------------------------------------------------------------------
 // Demo data (hard-coded until patient records and directories are wired up).

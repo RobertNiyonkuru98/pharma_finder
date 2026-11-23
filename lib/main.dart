@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'location/live_location.dart';
+import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
 
 Future<void> main() async {
@@ -70,7 +70,7 @@ class MediMatchApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => LocationCubit()..getCurrentLocation(),
+      create: (context) => LocationCubit()..loadIfPermitted(),
       child: MaterialApp(
         title: 'MediMatch',
         debugShowCheckedModeBanner: false,

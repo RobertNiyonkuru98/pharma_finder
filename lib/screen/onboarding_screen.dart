@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../location/live_location.dart';
+import '../features/location/live_location.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'login_screen.dart';
 

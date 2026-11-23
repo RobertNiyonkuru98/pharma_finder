@@ -6,7 +6,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_helpers.dart';
-import '../services/user_profile.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

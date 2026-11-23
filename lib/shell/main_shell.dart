@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_colors.dart';
-import '../features/emergency/emergency_screen.dart';
-import '../features/profile/profile_screen.dart';
+import 'package:pharma_finder/core/theme/app_colors.dart';
+import 'package:pharma_finder/features/emergency/presentation/emergency_screen.dart';
+import '../features/profile/presentation/profile_screen.dart';
 import '../services/user_profile.dart';
 
 /// Exposes the shell's tab controller to descendants so any child screen can

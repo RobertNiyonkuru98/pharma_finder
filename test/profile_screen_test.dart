@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pharma_finder/features/profile/profile_screen.dart';
+import 'package:pharma_finder/features/profile/presentation/profile_screen.dart';
 import 'package:pharma_finder/services/user_profile.dart';
 
 const UserProfile _testUser = UserProfile(

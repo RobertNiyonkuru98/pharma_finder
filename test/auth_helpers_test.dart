@@ -23,6 +23,19 @@ void main() {
     );
   });
 
+  group('formatRwandanPhone', () {
+    test('groups Rwandan numbers for display', () {
+      expect(formatRwandanPhone('+250788123456'), '+250 788 123 456');
+      expect(formatRwandanPhone('0788 123 456'), '+250 788 123 456');
+      expect(formatRwandanPhone('788443210'), '+250 788 443 210');
+    });
+
+    test('leaves unsupported values untouched', () {
+      expect(formatRwandanPhone('+254700000000'), '+254700000000');
+      expect(formatRwandanPhone('n/a'), 'n/a');
+    });
+  });
+
   group('isValidRwandanPhone', () {
     test('accepts all mobile prefixes', () {
       expect(isValidRwandanPhone('0721234567'), isTrue);

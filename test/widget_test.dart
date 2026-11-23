@@ -1,8 +1,4 @@
 // WIDGET test for the facilities screen.
-//
-// Deliberately does NOT pump the whole app: the root widget starts LocationCubit
-// and Firebase, both of which need platform channels and would fail in a test.
-// Testing the screen with its Cubit injected keeps this deterministic.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';

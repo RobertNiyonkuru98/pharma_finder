@@ -13,23 +13,27 @@ Widget _harness() => BlocProvider(
 );
 
 void main() {
-  testWidgets('shows a spinner first, then the facility list', (tester) async {
+  testWidgets('shows home sections and nearby providers after load', (
+    tester,
+  ) async {
     await tester.pumpWidget(_harness());
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Find care'), findsOneWidget);
+    expect(find.text('MediMatch'), findsOneWidget);
+    expect(find.text('Nearby Providers'), findsOneWidget);
     expect(find.text('Kigali Care Pharmacy'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('renders the out-of-stock marker', (tester) async {
+  testWidgets('renders quick filters and emergency CTA', (tester) async {
     await tester.pumpWidget(_harness());
     await tester.pumpAndSettle();
 
-    expect(find.text('Nyarutarama Clinic'), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.text('Pharmacies'), findsOneWidget);
+    expect(find.text('Hospitals'), findsOneWidget);
+    expect(find.text('Open Now'), findsOneWidget);
   });
 }

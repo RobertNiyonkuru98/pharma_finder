@@ -13,12 +13,16 @@ import 'facilities_state.dart';
 class FacilitiesCubit extends Cubit<FacilitiesState> {
   FacilitiesCubit() : super(FacilitiesInitial());
 
+  String _query = '';
+  String _selectedPlan = 'All';
+  final Set<FacilityQuickFilter> _activeQuickFilters = <FacilityQuickFilter>{};
+
   Future<void> load() async {
     emit(FacilitiesLoading());
     try {
       // TODO(david): replace with FacilityRepository.watchAll()
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      emit(const FacilitiesLoaded(_sample));
+      _emitFiltered();
     } catch (error) {
       emit(FacilitiesError(error.toString()));
     }
@@ -27,38 +31,71 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
   /// Filter used by the search field. Kept in the Cubit, not the widget, so it
   /// stays testable without pumping a screen.
   void search(String query) {
-    final current = state;
-    if (current is! FacilitiesLoaded) return;
+    _query = query.trim().toLowerCase();
+    _emitFiltered();
+  }
 
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) {
-      emit(const FacilitiesLoaded(_sample));
-      return;
+  void filterByPlan(String plan) {
+    _selectedPlan = plan;
+    _emitFiltered();
+  }
+
+  void toggleQuickFilter(FacilityQuickFilter filter) {
+    if (_activeQuickFilters.contains(filter)) {
+      _activeQuickFilters.remove(filter);
+    } else {
+      _activeQuickFilters.add(filter);
     }
+    _emitFiltered();
+  }
+
+  bool isQuickFilterSelected(FacilityQuickFilter filter) =>
+      _activeQuickFilters.contains(filter);
+
+  void _emitFiltered() {
+    final filtered = _sample.where((facility) {
+      if (_query.isNotEmpty &&
+          !facility.name.toLowerCase().contains(_query) &&
+          !facility.area.toLowerCase().contains(_query)) {
+        return false;
+      }
+
+      if (_selectedPlan != 'All' &&
+          !facility.acceptedPlans.contains(_selectedPlan)) {
+        return false;
+      }
+
+      if (_activeQuickFilters.contains(FacilityQuickFilter.pharmacies) &&
+          facility.type != 'pharmacy') {
+        return false;
+      }
+
+      if (_activeQuickFilters.contains(FacilityQuickFilter.hospitals) &&
+          facility.type != 'hospital') {
+        return false;
+      }
+
+      if (_activeQuickFilters.contains(FacilityQuickFilter.openNow) &&
+          !_isOpenNow(facility)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
 
     emit(
       FacilitiesLoaded(
-        _sample
-            .where(
-              (f) =>
-                  f.name.toLowerCase().contains(q) ||
-                  f.area.toLowerCase().contains(q),
-            )
-            .toList(),
+        filtered,
+        activeQuickFilters: Set<FacilityQuickFilter>.unmodifiable(
+          _activeQuickFilters,
+        ),
       ),
     );
   }
 
-  void filterByPlan(String plan) {
-    if (plan == 'All') {
-      emit(const FacilitiesLoaded(_sample));
-      return;
-    }
-    emit(
-      FacilitiesLoaded(
-        _sample.where((f) => f.acceptedPlans.contains(plan)).toList(),
-      ),
-    );
+  bool _isOpenNow(Facility facility) {
+    final openingHours = facility.openingHours.toLowerCase();
+    return openingHours.contains('24');
   }
 
   static const List<Facility> _sample = [
@@ -69,6 +106,10 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       area: 'Remera',
       openingHours: '08:00 - 22:00',
       acceptedPlans: ['Mutuelle', 'Britam'],
+      rating: 4.6,
+      distanceKm: 1.2,
+      languages: ['EN', 'FR', 'RW'],
+      phone: '+250788555201',
     ),
     Facility(
       id: 'f2',
@@ -77,6 +118,10 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       area: 'Kibagabaga',
       openingHours: '24 hours',
       acceptedPlans: ['Mutuelle', 'RSSB'],
+      rating: 4.4,
+      distanceKm: 2.7,
+      languages: ['EN', 'RW'],
+      phone: '+250788303030',
     ),
     Facility(
       id: 'f3',
@@ -86,6 +131,8 @@ class FacilitiesCubit extends Cubit<FacilitiesState> {
       openingHours: '07:30 - 20:00',
       acceptedPlans: ['Britam', 'Old Mutual'],
       hasStock: false,
+      rating: 4.1,
+      distanceKm: 3.6,
     ),
   ];
 }

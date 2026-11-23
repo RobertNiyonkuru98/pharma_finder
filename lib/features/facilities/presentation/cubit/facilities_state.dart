@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/facility.dart';
 
+enum FacilityQuickFilter { pharmacies, hospitals, openNow }
+
 /// Every screen state the UI must be able to render.
 ///
 /// The four states below are not decoration: the rubric asks for loading and
@@ -19,13 +21,17 @@ class FacilitiesLoading extends FacilitiesState {}
 
 class FacilitiesLoaded extends FacilitiesState {
   final List<Facility> facilities;
+  final Set<FacilityQuickFilter> activeQuickFilters;
 
-  const FacilitiesLoaded(this.facilities);
+  const FacilitiesLoaded(
+    this.facilities, {
+    this.activeQuickFilters = const <FacilityQuickFilter>{},
+  });
 
   bool get isEmpty => facilities.isEmpty;
 
   @override
-  List<Object?> get props => [facilities];
+  List<Object?> get props => [facilities, activeQuickFilters];
 }
 
 class FacilitiesError extends FacilitiesState {

@@ -9,9 +9,7 @@ import 'package:pharma_finder/features/insurance/presentation/screens/insurance_
 /// missing widget throws here instead of on the phone during the demo. It is
 /// the closest thing to "did the UI actually lay out" that runs without Firebase.
 void main() {
-  testWidgets('renders the seven schemes and a disabled Continue', (
-    tester,
-  ) async {
+  testWidgets('renders the schemes and a disabled Continue', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: InsuranceScreen()));
     await tester.pumpAndSettle();
 
@@ -58,5 +56,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No scheme matches that search.'), findsOneWidget);
+  });
+
+  testWidgets('the clear button empties the search and restores the list', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: InsuranceScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Clear search'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'military');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RSSB (RAMA)'), findsOneWidget);
+    expect(find.byTooltip('Clear search'), findsNothing);
+  });
+
+  testWidgets('no back arrow when there is nothing to go back to', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: InsuranceScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.arrow_back), findsNothing);
   });
 }

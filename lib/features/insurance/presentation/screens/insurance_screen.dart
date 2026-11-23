@@ -17,20 +17,38 @@ class InsuranceScreen extends StatelessWidget {
 
   Future<void> _continue(BuildContext context) async {
     final cubit = context.read<InsuranceCubit>();
-    final ok = await cubit.saveSelection();
-    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
-    if (!ok) {
-      final message = cubit.state.error ?? 'Could not save your selection.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    Navigator.of(context).pushReplacement(
+    void goNext() => navigator.pushReplacement(
       MaterialPageRoute(builder: (_) => const LiveLocationScreen()),
     );
+
+    final outcome = await cubit.saveSelection();
+    if (!context.mounted) return;
+
+    final message = cubit.state.error ?? 'Could not save your selection.';
+    messenger.hideCurrentSnackBar();
+
+    switch (outcome) {
+      case SaveOutcome.saved:
+        goNext();
+      case SaveOutcome.guest:
+        // The messenger belongs to MaterialApp, so this survives the route swap.
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+        goNext();
+      case SaveOutcome.failed:
+        // Stay here so the user can retry, but don't trap them offline.
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(label: 'Continue anyway', onPressed: goNext),
+          ),
+        );
+      case SaveOutcome.noChoice:
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
@@ -135,21 +153,27 @@ class _ProgressHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Login/signup *replace* themselves with this screen, so there is usually
+    // nothing behind it. Only offer Back when it actually goes somewhere.
+    final canGoBack = ModalRoute.of(context)?.canPop ?? false;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.sm,
+        canGoBack ? AppSpacing.sm : AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back, size: 20),
-            color: AppColors.ink,
-          ),
-          const SizedBox(width: 4),
+          if (canGoBack) ...[
+            IconButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back, size: 20),
+              color: AppColors.ink,
+            ),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -167,19 +191,46 @@ class _ProgressHeader extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
+class _SearchField extends StatefulWidget {
   final InsuranceState state;
 
   const _SearchField({required this.state});
 
   @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _clear() {
+    _controller.clear();
+    context.read<InsuranceCubit>().clearSearch();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: _controller,
       onChanged: (v) => context.read<InsuranceCubit>().search(v),
+      textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: 'Search provider (e.g. RSSB, MMI, Britam)',
         hintStyle: const TextStyle(fontSize: 13, color: AppColors.muted),
         prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.muted),
+        suffixIcon: widget.state.query.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: _clear,
+                icon: const Icon(Icons.close, size: 18, color: AppColors.muted),
+              ),
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(vertical: 4),
@@ -236,12 +287,18 @@ class _PlanCard extends StatelessWidget {
                 Container(
                   height: 40,
                   width: 40,
+                  // Recommended schemes get a mint tile and a verified shield
+                  // so they stand out even when they carry no badge text.
                   decoration: BoxDecoration(
-                    color: AppColors.lavender,
+                    color: plan.isRecommended
+                        ? AppColors.primaryTint
+                        : AppColors.lavender,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.shield_outlined,
+                  child: Icon(
+                    plan.isRecommended
+                        ? Icons.verified_user
+                        : Icons.shield_outlined,
                     size: 20,
                     color: AppColors.primary,
                   ),

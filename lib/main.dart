@@ -9,11 +9,6 @@ import 'core/router/app_shell.dart';
 import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
 
-/// Returns the session Firebase persisted on disk, or `null` when signed out.
-///
-/// `currentUser` can still be `null` for a moment on a cold start while
-/// Firebase Auth restores the session, so wait for the first auth state event
-/// before deciding where to send the user.
 Future<User?> _restoreSession() async {
   final auth = FirebaseAuth.instance;
   if (auth.currentUser != null) return auth.currentUser;
@@ -30,27 +25,16 @@ Future<User?> _restoreSession() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // .env is gitignored, so a fresh clone will not have it. Load it when present:
-  // the auth screens read GOOGLE_WEB_CLIENT_ID from it, and flutter_dotenv throws
-  // NotInitializedError the moment env is read without a prior load().
   try {
     await dotenv.load();
-  } catch (_) {
-    // Absent .env is expected and must not be fatal. Google Sign-In then falls
-    // back to the web OAuth client declared in google-services.json.
-  }
+  } catch (_) { }
 
   try {
-    // On Android the google-services gradle plugin reads
-    // android/app/google-services.json at build time, so no options are passed
-    // here.
     await Firebase.initializeApp();
 
     final restored = await _restoreSession();
 
     // Restore the last known position before the first frame so the GPS card
-    // and the profile's "Current Base" have data on a warm start.
     if (restored != null) {
       await LocationStore.load();
     }

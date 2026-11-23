@@ -2,8 +2,9 @@ import 'package:equatable/equatable.dart';
 
 /// A Rwandan health insurance scheme a user can select.
 ///
-/// Domain layer: no Flutter, no Firebase. The seven entries mirror the
-/// "Choose your insurance" screen in the Figma design.
+/// Domain layer: no Flutter, no Firebase. The entries mirror the
+/// "Choose your insurance" screen in the Figma design, plus Mutuelle de Santé
+/// (CBHI), the community scheme most Rwandans are enrolled in.
 class InsurancePlan extends Equatable {
   final String id;
   final String name;
@@ -39,6 +40,12 @@ class InsurancePlan extends Equatable {
       description: 'Comprehensive in Rwanda',
       badge: 'Widely Accepted',
       isRecommended: true,
+    ),
+    InsurancePlan(
+      id: 'cbhi',
+      name: 'Mutuelle de Santé (CBHI)',
+      category: 'Community-Based Health Insurance',
+      description: 'Health centres & district hospitals',
     ),
     InsurancePlan(
       id: 'mmi',

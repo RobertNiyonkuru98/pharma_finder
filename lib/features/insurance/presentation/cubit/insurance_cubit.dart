@@ -1,8 +1,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'insurance_state.dart';
+
+/// What happened when the user pressed Continue.
+enum SaveOutcome {
+  /// No scheme chosen yet — stay on the screen.
+  noChoice,
+
+  /// Written to Firestore.
+  saved,
+
+  /// Browsing without an account, so there is nowhere to save it.
+  guest,
+
+  /// The Firestore write failed. The user can retry or continue anyway.
+  failed,
+}
 
 /// Owns selection + persistence of the user's insurance scheme.
 ///
@@ -23,16 +39,16 @@ class InsuranceCubit extends Cubit<InsuranceState> {
     emit(state.copyWith(query: ''));
   }
 
-  /// Persists the selection, then returns true so the caller can navigate.
+  /// Persists the selection and reports the outcome so the screen can tell
+  /// the user what happened instead of silently moving on.
   ///
-  /// Never throws: if Firebase is unreachable the user is still allowed through
-  /// to the app, and the failure is reported in state. Blocking the whole app
-  /// on a database write would make a network hiccup look like a broken build.
-  Future<bool> saveSelection() async {
+  /// Never throws: a failed write is returned as [SaveOutcome.failed] with a
+  /// readable message in `state.error`.
+  Future<SaveOutcome> saveSelection() async {
     final plan = state.selected;
     if (plan == null) {
       emit(state.copyWith(error: 'Choose an insurance scheme first.'));
-      return false;
+      return SaveOutcome.noChoice;
     }
 
     emit(state.copyWith(submitting: true, clearError: true));
@@ -43,10 +59,10 @@ class InsuranceCubit extends Cubit<InsuranceState> {
         emit(
           state.copyWith(
             submitting: false,
-            error: 'Not signed in — selection saved on this device only.',
+            error: "You're browsing as a guest, so your scheme isn't saved.",
           ),
         );
-        return true;
+        return SaveOutcome.guest;
       }
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -56,15 +72,17 @@ class InsuranceCubit extends Cubit<InsuranceState> {
       }, SetOptions(merge: true));
 
       emit(state.copyWith(submitting: false));
-      return true;
+      return SaveOutcome.saved;
     } catch (e) {
+      debugPrint('Saving insurance plan failed: $e');
       emit(
         state.copyWith(
           submitting: false,
-          error: 'Could not save to Firestore: $e',
+          error:
+              "Couldn't save your scheme. Check your connection and try again.",
         ),
       );
-      return true; // still let the user in
+      return SaveOutcome.failed;
     }
   }
 }

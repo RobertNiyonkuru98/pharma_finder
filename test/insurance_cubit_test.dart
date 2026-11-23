@@ -10,10 +10,10 @@ import 'package:pharma_finder/features/insurance/presentation/cubit/insurance_cu
 /// is the point of keeping the logic in the Cubit rather than the widget.
 void main() {
   group('InsuranceCubit', () {
-    test('starts with all seven schemes and nothing selected', () {
+    test('starts with all eight schemes and nothing selected', () {
       final cubit = InsuranceCubit();
 
-      expect(cubit.state.plans.length, 7);
+      expect(cubit.state.plans.length, 8);
       expect(cubit.state.selectedId, isNull);
       expect(cubit.state.selected, isNull);
       expect(cubit.state.canContinue, isFalse);
@@ -34,6 +34,14 @@ void main() {
 
       expect(rssb.isRecommended, isTrue);
       expect(rssb.badge, 'Widely Accepted');
+    });
+
+    test('Mutuelle de Santé (CBHI) is offered and searchable', () {
+      final cubit = InsuranceCubit();
+
+      cubit.search('mutuelle');
+
+      expect(cubit.state.visible.single.id, 'cbhi');
     });
 
     test('search narrows by name', () {
@@ -75,9 +83,9 @@ void main() {
       () async {
         final cubit = InsuranceCubit();
 
-        final ok = await cubit.saveSelection();
+        final outcome = await cubit.saveSelection();
 
-        expect(ok, isFalse);
+        expect(outcome, SaveOutcome.noChoice);
         expect(cubit.state.error, isNotNull);
       },
     );

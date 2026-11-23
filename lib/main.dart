@@ -1,30 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'location/live_location.dart';
+import 'core/location/location_store.dart';
+import 'core/router/app_shell.dart';
+import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
+
+Future<User?> _restoreSession() async {
+  final auth = FirebaseAuth.instance;
+  if (auth.currentUser != null) return auth.currentUser;
+
+  try {
+    return await auth.authStateChanges().first.timeout(
+      const Duration(seconds: 3),
+    );
+  } catch (error) {
+    debugPrint('Session restore failed: $error');
+    return auth.currentUser;
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // .env is gitignored, so a fresh clone will not have it. Load it when present:
-  // the auth screens read GOOGLE_WEB_CLIENT_ID from it, and flutter_dotenv throws
-  // NotInitializedError the moment env is read without a prior load().
   try {
     await dotenv.load();
-  } catch (_) {
-    // Absent .env is expected and must not be fatal. Google Sign-In then falls
-    // back to the web OAuth client declared in google-services.json.
-  }
+  } catch (_) { }
 
   try {
-    // On Android the google-services gradle plugin reads
-    // android/app/google-services.json at build time, so no options are passed
-    // here.
     await Firebase.initializeApp();
-    runApp(const MediMatchApp());
+
+    final restored = await _restoreSession();
+
+    // Restore the last known position before the first frame so the GPS card
+    if (restored != null) {
+      await LocationStore.load();
+    }
+
+    runApp(MediMatchApp(startSignedIn: restored != null));
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
     runApp(FirebaseErrorApp(message: e.toString()));
@@ -65,12 +80,16 @@ class FirebaseErrorApp extends StatelessWidget {
 }
 
 class MediMatchApp extends StatelessWidget {
-  const MediMatchApp({super.key});
+  const MediMatchApp({super.key, this.startSignedIn = false});
+
+  /// True when a persisted Firebase session was restored before the first
+  /// frame. Signed-in users skip onboarding and land in the app shell.
+  final bool startSignedIn;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => LocationCubit()..getCurrentLocation(),
+      create: (context) => LocationCubit()..loadIfPermitted(),
       child: MaterialApp(
         title: 'MediMatch',
         debugShowCheckedModeBanner: false,
@@ -78,7 +97,7 @@ class MediMatchApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF016960)),
           useMaterial3: true,
         ),
-        home: const OnboardingScreen(),
+        home: startSignedIn ? const AppShell() : const OnboardingScreen(),
       ),
     );
   }

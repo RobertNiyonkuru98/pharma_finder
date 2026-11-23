@@ -6,6 +6,7 @@ import 'package:pharma_finder/core/theme/app_theme.dart';
 import 'package:pharma_finder/features/insurance/domain/entities/insurance_plan.dart';
 import 'package:pharma_finder/features/insurance/presentation/cubit/insurance_cubit.dart';
 import 'package:pharma_finder/features/insurance/presentation/cubit/insurance_state.dart';
+import 'package:pharma_finder/features/location/presentation/live_location_screen.dart';
 
 /// "Choose your insurance" — matches the Figma screen of the same name.
 ///
@@ -27,9 +28,9 @@ class InsuranceScreen extends StatelessWidget {
       return;
     }
 
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const LiveLocationScreen()),
+    );
   }
 
   @override

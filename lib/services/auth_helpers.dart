@@ -21,6 +21,17 @@ String normalizeRwandanPhone(String raw) {
   return '+250$digits';
 }
 
+/// Formats a Rwandan number for display, e.g. `+250 788 123 456`.
+///
+/// Values that are not Rwandan mobile numbers are returned unchanged.
+String formatRwandanPhone(String raw) {
+  final normalized = normalizeRwandanPhone(raw);
+  if (!RegExp(r'^\+2507\d{8}$').hasMatch(normalized)) return raw;
+  final digits = normalized.substring(4);
+  return '+250 ${digits.substring(0, 3)} ${digits.substring(3, 6)} '
+      '${digits.substring(6)}';
+}
+
 /// Rwanda mobile numbers are 9 digits: 7 followed by 2, 3, 8 or 9.
 bool isValidRwandanPhone(String raw) =>
     RegExp(r'^\+2507[2389]\d{7}$').hasMatch(normalizeRwandanPhone(raw));

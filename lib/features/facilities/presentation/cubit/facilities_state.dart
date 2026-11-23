@@ -4,6 +4,27 @@ import '../../domain/entities/facility.dart';
 
 enum FacilityQuickFilter { pharmacies, hospitals, openNow }
 
+enum FacilityCategoryFilter { allCare, pharmacies, hospitals }
+
+enum OperatingHoursFilter { anyTime, openNow, twentyFourHours }
+
+enum DistanceRadiusFilter {
+  oneKm(1),
+  threeKm(3),
+  fiveKm(5),
+  tenKm(10);
+
+  const DistanceRadiusFilter(this.kilometers);
+  final int kilometers;
+}
+
+enum SpecificNeedFilter {
+  prescriptionRefill,
+  overTheCounter,
+  maternalCare,
+  emergencyTriage,
+}
+
 /// Every screen state the UI must be able to render.
 ///
 /// The four states below are not decoration: the rubric asks for loading and
@@ -22,16 +43,37 @@ class FacilitiesLoading extends FacilitiesState {}
 class FacilitiesLoaded extends FacilitiesState {
   final List<Facility> facilities;
   final Set<FacilityQuickFilter> activeQuickFilters;
+  final String query;
+  final FacilityCategoryFilter category;
+  final Set<String> selectedInsurancePlanIds;
+  final OperatingHoursFilter operatingHoursFilter;
+  final DistanceRadiusFilter distanceRadiusFilter;
+  final Set<SpecificNeedFilter> selectedNeeds;
 
   const FacilitiesLoaded(
     this.facilities, {
     this.activeQuickFilters = const <FacilityQuickFilter>{},
+    this.query = '',
+    this.category = FacilityCategoryFilter.allCare,
+    this.selectedInsurancePlanIds = const <String>{},
+    this.operatingHoursFilter = OperatingHoursFilter.anyTime,
+    this.distanceRadiusFilter = DistanceRadiusFilter.fiveKm,
+    this.selectedNeeds = const <SpecificNeedFilter>{},
   });
 
   bool get isEmpty => facilities.isEmpty;
 
   @override
-  List<Object?> get props => [facilities, activeQuickFilters];
+  List<Object?> get props => [
+    facilities,
+    activeQuickFilters,
+    query,
+    category,
+    selectedInsurancePlanIds,
+    operatingHoursFilter,
+    distanceRadiusFilter,
+    selectedNeeds,
+  ];
 }
 
 class FacilitiesError extends FacilitiesState {

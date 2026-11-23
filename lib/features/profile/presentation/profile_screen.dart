@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:pharma_finder/core/firestore/user_repository.dart';
 import 'package:pharma_finder/core/location/location_store.dart';
+import 'package:pharma_finder/core/preferences/app_preferences.dart';
+import 'package:pharma_finder/core/preferences/preferences_cubit.dart';
 import 'package:pharma_finder/core/theme/app_colors.dart';
 import 'package:pharma_finder/features/about/presentation/screens/about_screen.dart';
 import 'package:pharma_finder/features/insurance/domain/entities/insurance_plan.dart';
+import 'package:pharma_finder/features/profile/presentation/cubit/profile_cubit.dart';
 import 'package:pharma_finder/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:pharma_finder/services/auth_helpers.dart';
 import 'package:pharma_finder/services/user_profile.dart';
@@ -132,69 +135,18 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-/// Firestore profile plus the optional `app_config/about` document.
-class _ProfileBundle {
-  const _ProfileBundle({required this.profile, this.about});
-
-  final Map<String, dynamic> profile;
-  final Map<String, dynamic>? about;
-}
-
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const List<int> _radiusStops = <int>[1, 5, 10, 25];
-
-  int _radiusIndex = 1;
-  bool _showOpenFirst = true;
-  bool _insuranceOnly = true;
-
-  late Future<_ProfileBundle> _future;
+  late final ProfileCubit _profileCubit = ProfileCubit(widget.user)..load();
 
   @override
-  void initState() {
-    super.initState();
-    _future = _load();
+  void dispose() {
+    _profileCubit.close();
+    super.dispose();
   }
 
-  /// Firestore values win, the signed-in account fills the gaps, and a failed
-  /// read falls back to the account-only snapshot instead of blocking the
-  /// screen.
-  Future<_ProfileBundle> _load() async {
-    final profile = <String, dynamic>{
-      'fullName': widget.user.fullName,
-      'email': widget.user.email,
-      'phone': widget.user.phone,
-      'photoUrl': widget.user.photoUrl,
-    };
+  PreferencesCubit get _preferences => context.read<PreferencesCubit>();
 
-    final uid = UserRepository.currentUid;
-    if (uid != null) {
-      final remote = await UserRepository.fetchProfile(uid);
-      if (remote != null) {
-        for (final entry in remote.entries) {
-          final value = entry.value;
-          if (value == null) continue;
-          if (value is String && value.trim().isEmpty) continue;
-          profile[entry.key] = value;
-        }
-      }
-    }
-
-    final about = await UserRepository.fetchAbout();
-    return _ProfileBundle(profile: profile, about: about);
-  }
-
-  _ProfileBundle get _fallbackBundle => _ProfileBundle(
-    profile: <String, dynamic>{
-      'fullName': widget.user.fullName,
-      'email': widget.user.email,
-      'phone': widget.user.phone,
-      'photoUrl': widget.user.photoUrl,
-    },
-  );
-
-  void _reload() {
-    setState(() => _future = _load());
-  }
+  void _reload() => _profileCubit.reload();
 
   void _comingSoon(String label) {
     ScaffoldMessenger.of(context)
@@ -276,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openSettingsItem(_SettingsItem item, _ProfileBundle bundle) {
+  void _openSettingsItem(_SettingsItem item, ProfileBundle bundle) {
     if (item.isAbout) {
       _openAbout(bundle.about);
       return;
@@ -286,19 +238,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.pageBackground,
-      body: SafeArea(
-        bottom: false,
-        child: FutureBuilder<_ProfileBundle>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const _ProfileLoadingSkeleton();
-            }
-            final bundle = snapshot.data ?? _fallbackBundle;
+    return BlocProvider<ProfileCubit>.value(
+      value: _profileCubit,
+      child: BlocBuilder<ProfileCubit, ProfileState>(
+        builder: (context, profileState) {
+          final preferences = context.watch<PreferencesCubit>().state;
+          final bundle = profileState.bundle;
 
-            return SingleChildScrollView(
+          return Scaffold(
+            backgroundColor: AppColors.pageBackground,
+            body: SafeArea(
+              bottom: false,
+              child: profileState.loading
+                  ? const _ProfileLoadingSkeleton()
+                  : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.pagePadding,
                 12,
@@ -332,17 +285,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     baseLabel: LocationStore.cached.hasFix
                         ? LocationStore.cached.placeName
                         : 'Kigali • Nyarugenge / Gasabo',
-                    radiusStops: _radiusStops,
-                    radiusIndex: _radiusIndex,
-                    onRadiusChanged: (index) =>
-                        setState(() => _radiusIndex = index),
-                    showOpenFirst: _showOpenFirst,
+                    radiusStops: AppPreferences.radiusStops,
+                    radiusIndex: preferences.radiusIndex,
+                    onRadiusChanged: (index) => _preferences
+                        .setSearchRadiusKm(AppPreferences.radiusStops[index]),
+                    showOpenFirst: preferences.showOpenFirst,
                     onShowOpenFirstChanged: (value) =>
-                        setState(() => _showOpenFirst = value),
-                    insuranceOnly: _insuranceOnly,
+                        _preferences.setShowOpenFirst(value),
+                    insuranceOnly: preferences.insuranceOnly,
                     onInsuranceOnlyChanged: (value) =>
-                        setState(() => _insuranceOnly = value),
+                        _preferences.setInsuranceOnly(value),
                     onChangeBase: () => _comingSoon('Changing your base district'),
+                  ),
+                  const SizedBox(height: 24),
+                  _AppPreferencesSection(
+                    themeMode: preferences.themeMode,
+                    onThemeModeChanged: (mode) =>
+                        _preferences.setThemeMode(mode),
+                    dutyRosterAlerts: preferences.dutyRosterAlerts,
+                    onDutyRosterAlertsChanged: (value) =>
+                        _preferences.setDutyRosterAlerts(value),
+                    preciseGps: preferences.preciseGps,
+                    onPreciseGpsChanged: (value) =>
+                        _preferences.setPreciseGps(value),
                   ),
                   const SizedBox(height: 24),
                   _SettingsSupportSection(
@@ -356,9 +321,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-            );
-          },
-        ),
+            ),
+          ));
+        },
       ),
     );
   }
@@ -1362,6 +1327,109 @@ class _PreferenceToggle extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _AppPreferencesSection extends StatelessWidget {
+  const _AppPreferencesSection({
+    required this.themeMode,
+    required this.onThemeModeChanged,
+    required this.dutyRosterAlerts,
+    required this.onDutyRosterAlertsChanged,
+    required this.preciseGps,
+    required this.onPreciseGpsChanged,
+  });
+
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+  final bool dutyRosterAlerts;
+  final ValueChanged<bool> onDutyRosterAlertsChanged;
+  final bool preciseGps;
+  final ValueChanged<bool> onPreciseGpsChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const _SectionHeader(
+          icon: Icons.settings_suggest_rounded,
+          title: 'App Preferences',
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            boxShadow: AppShadows.soft,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const Text(
+                'Appearance',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Saved on this device and restored at launch',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final mode in ThemeMode.values)
+                    ChoiceChip(
+                      label: Text(_themeLabel(mode)),
+                      selected: themeMode == mode,
+                      onSelected: (_) => onThemeModeChanged(mode),
+                      selectedColor: AppColors.primaryGreen,
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: themeMode == mode
+                            ? AppColors.white
+                            : AppColors.textDark,
+                      ),
+                      backgroundColor: AppColors.lavenderTint,
+                      side: BorderSide.none,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _PreferenceToggle(
+                title: 'Duty roster alerts',
+                subtitle: 'Night pharmacy & urgent clinic schedules',
+                value: dutyRosterAlerts,
+                onChanged: onDutyRosterAlertsChanged,
+              ),
+              const SizedBox(height: 6),
+              _PreferenceToggle(
+                title: 'Precise GPS',
+                subtitle: 'Use high-accuracy positioning while using the app',
+                value: preciseGps,
+                onChanged: onPreciseGpsChanged,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _themeLabel(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.system => 'System',
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+    };
   }
 }
 

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import 'signup_screen.dart';
 import '../core/firestore/user_repository.dart';
 import '../core/location/location_store.dart';
+import '../features/auth/presentation/cubit/login_cubit.dart';
 import '../services/auth_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -19,15 +21,18 @@ class _LoginScreenState extends State<LoginScreen> {
   static const _primary = Color(0xFF0A6C56);
   static const _surface = Color(0xFFF3F5FA);
 
-  bool _isPhone = true;
-  bool _loading = false;
+  final LoginCubit _cubit = LoginCubit();
   final _contactCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+
+  bool get _isPhone => _cubit.state.isPhoneMode;
+  // bool get _loading => _cubit.state.isLoading;
 
   @override
   void dispose() {
     _contactCtrl.dispose();
     _passCtrl.dispose();
+    _cubit.close();
     super.dispose();
   }
 
@@ -58,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _msg('Enter your password.');
       return;
     }
-    setState(() => _loading = true);
+    _cubit.startLoading();
 
     try {
       if (_isPhone) {
@@ -97,13 +102,13 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('Sign-in failed: $e');
       _msg('Sign-in failed. Please check your connection and try again.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) _cubit.stopLoading();
     }
   }
 
   // Signing In with Google Account
   Future<void> _signInWithGoogle() async {
-    setState(() => _loading = true);
+    _cubit.startLoading();
     try {
       final webId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
       // Fall back to the web OAuth client in google-services.json when unset.
@@ -137,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       _msg('Google Sign-In error: $e');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) _cubit.stopLoading();
     }
   }
 
@@ -162,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              setState(() => _loading = true);
+              _cubit.startLoading();
               try {
                 final cred = PhoneAuthProvider.credential(
                   verificationId: verId,
@@ -174,12 +179,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 _goNext('Welcome back to MediMatch!');
               } on FirebaseAuthException catch (e) {
                 if (mounted) {
-                  setState(() => _loading = false);
+                  _cubit.stopLoading();
                   _msg(friendlyAuthError(e, mode: 'phone'));
                 }
               } catch (_) {
                 if (mounted) {
-                  setState(() => _loading = false);
+                  _cubit.stopLoading();
                   _msg('Could not verify that code. Please try again.');
                 }
               }
@@ -194,6 +199,9 @@ class _LoginScreenState extends State<LoginScreen> {
   // Main Build Method
   @override
   Widget build(BuildContext context) {
+    return BlocBuilder<LoginCubit, LoginState>(
+      bloc: _cubit,
+      builder: (context, state) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFC),
       body: SafeArea(
@@ -282,14 +290,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           _tab(
                             'Phone (+250)',
                             Icons.phone_outlined,
-                            _isPhone,
-                            () => setState(() => _isPhone = true),
+                            state.isPhoneMode,
+                            _cubit.usePhone,
                           ),
                           _tab(
                             'Email',
                             Icons.mail_outline,
-                            !_isPhone,
-                            () => setState(() => _isPhone = false),
+                            !state.isPhoneMode,
+                            _cubit.useEmail,
                           ),
                         ],
                       ),
@@ -299,13 +307,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _isPhone ? 'Mobile Phone Number' : 'Email Address',
+                          state.isPhoneMode ? 'Mobile Phone Number' : 'Email Address',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (_isPhone)
+                        if (state.isPhoneMode)
                           const Text(
                             'MTN / Airtel',
                             style: TextStyle(
@@ -319,14 +327,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 6),
                     _field(
                       ctrl: _contactCtrl,
-                      hint: _isPhone ? '788 123 456' : 'name@gmail.com',
-                      prefix: _isPhone ? '🇷🇼 +250  ' : null,
-                      icon: _isPhone ? null : Icons.alternate_email,
-                      type: _isPhone
+                      hint: state.isPhoneMode ? '788 123 456' : 'name@gmail.com',
+                      prefix: state.isPhoneMode ? '🇷🇼 +250  ' : null,
+                      icon: state.isPhoneMode ? null : Icons.alternate_email,
+                      type: state.isPhoneMode
                           ? TextInputType.phone
                           : TextInputType.emailAddress,
                     ),
-                    if (!_isPhone) ...[
+                    if (!state.isPhoneMode) ...[
                       const SizedBox(height: 12),
                       const Text(
                         'Password',
@@ -361,8 +369,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: _loading ? null : _signIn,
-                        child: _loading
+                        onPressed: state.isLoading ? null : _signIn,
+                        child: state.isLoading
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
@@ -417,7 +425,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: _loading ? null : _signInWithGoogle,
+                        onPressed: state.isLoading ? null : _signInWithGoogle,
                         icon: const Icon(
                           Icons.g_mobiledata,
                           color: Colors.red,
@@ -437,7 +445,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Center(
                       child: TextButton.icon(
-                        onPressed: _loading
+                        onPressed: state.isLoading
                             ? null
                             : () => _goNext('Exploring as Guest'),
                         icon: const Icon(
@@ -558,6 +566,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 

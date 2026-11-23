@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'insurance_screen.dart';
 import '../core/location/location_store.dart';
+import '../features/auth/presentation/cubit/signup_cubit.dart';
 import '../services/auth_helpers.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -18,8 +20,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const _primaryColor = Color(0xFF0A6C56);
   static const _surfaceColor = Color(0xFFF3F5FA);
 
-  bool _isPhoneMode = true;
-  bool _isLoading = false;
+  final SignUpCubit _cubit = SignUpCubit();
+
+  bool get _isPhoneMode => _cubit.state.isPhoneMode;
+  // bool get _isLoading => _cubit.state.isLoading;
 
   final _nameCtrl = TextEditingController();
   final _contactCtrl = TextEditingController(); // Phone or Email
@@ -30,6 +34,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _nameCtrl.dispose();
     _contactCtrl.dispose();
     _passwordCtrl.dispose();
+    _cubit.close();
     super.dispose();
   }
 
@@ -55,7 +60,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    _cubit.startLoading();
 
     try {
       if (_isPhoneMode) {
@@ -77,21 +82,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
               );
             } on FirebaseAuthException catch (e) {
               if (mounted) {
-                setState(() => _isLoading = false);
+                _cubit.stopLoading();
                 _showMsg(friendlyAuthError(e, mode: 'phone'));
               }
             }
           },
           verificationFailed: (FirebaseAuthException e) {
             if (mounted) {
-              setState(() => _isLoading = false);
+              _cubit.stopLoading();
               _showMsg(
                 'Phone Auth Error: ${friendlyAuthError(e, mode: 'phone')}',
               );
             }
           },
           codeSent: (String verificationId, int? resendToken) {
-            if (mounted) setState(() => _isLoading = false);
+            if (mounted) _cubit.stopLoading();
             _showOtpDialog(verificationId, name, formattedPhone);
           },
           codeAutoRetrievalTimeout: (String verificationId) {},
@@ -121,13 +126,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _cubit.stopLoading();
     }
   }
 
   // Sign Up Using Google Account
   Future<void> _signUpWithGoogle() async {
-    setState(() => _isLoading = true);
+    _cubit.startLoading();
     try {
       final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
       // Fall back to the web OAuth client in google-services.json when unset.
@@ -198,7 +203,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       debugPrint('Sign In with Google Failed: $e');
       if (mounted) _showMsg('Google Sign-In failed: $e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _cubit.stopLoading();
     }
   }
 
@@ -235,7 +240,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } finally {
       await LocationStore.load();
       if (mounted) {
-        setState(() => _isLoading = false);
+        _cubit.stopLoading();
         _showMsg('Account created! Welcome to MediMatch.');
         Navigator.pushReplacement(
           context,
@@ -268,7 +273,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              setState(() => _isLoading = true);
+              _cubit.startLoading();
               try {
                 final credential = PhoneAuthProvider.credential(
                   verificationId: verificationId,
@@ -285,12 +290,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 );
               } on FirebaseAuthException catch (e) {
                 if (mounted) {
-                  setState(() => _isLoading = false);
+                  _cubit.stopLoading();
                   _showMsg(friendlyAuthError(e, mode: 'phone'));
                 }
               } catch (_) {
                 if (mounted) {
-                  setState(() => _isLoading = false);
+                  _cubit.stopLoading();
                   _showMsg('Could not verify that code. Please try again.');
                 }
               }
@@ -310,6 +315,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   // Main UI Build Method
   @override
   Widget build(BuildContext context) {
+    return BlocBuilder<SignUpCubit, SignUpState>(
+      bloc: _cubit,
+      builder: (context, state) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFC),
       body: SafeArea(
@@ -408,14 +416,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           _modeTab(
                             'Phone (+250)',
                             Icons.phone_outlined,
-                            _isPhoneMode,
-                            () => setState(() => _isPhoneMode = true),
+                            state.isPhoneMode,
+                            _cubit.usePhone,
                           ),
                           _modeTab(
                             'Email',
                             Icons.mail_outline,
-                            !_isPhoneMode,
-                            () => setState(() => _isPhoneMode = false),
+                            !state.isPhoneMode,
+                            _cubit.useEmail,
                           ),
                         ],
                       ),
@@ -443,7 +451,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _isPhoneMode
+                          state.isPhoneMode
                               ? 'Mobile Phone Number'
                               : 'Email Address',
                           style: const TextStyle(
@@ -451,7 +459,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (_isPhoneMode)
+                        if (state.isPhoneMode)
                           const Text(
                             'MTN / Airtel',
                             style: TextStyle(
@@ -465,17 +473,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const SizedBox(height: 6),
                     _inputField(
                       controller: _contactCtrl,
-                      hint: _isPhoneMode ? '788 123 456' : 'name@gmail.com',
-                      prefixText: _isPhoneMode ? '🇷🇼 +250  ' : null,
-                      icon: _isPhoneMode ? null : Icons.alternate_email,
-                      keyboardType: _isPhoneMode
+                      hint: state.isPhoneMode ? '788 123 456' : 'name@gmail.com',
+                      prefixText: state.isPhoneMode ? '🇷🇼 +250  ' : null,
+                      icon: state.isPhoneMode ? null : Icons.alternate_email,
+                      keyboardType: state.isPhoneMode
                           ? TextInputType.phone
                           : TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 12),
 
                     // Password Field
-                    if (!_isPhoneMode) ...[
+                    if (!state.isPhoneMode) ...[
                       const Text(
                         'Create Password',
                         style: TextStyle(
@@ -505,8 +513,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: _isLoading ? null : _registerUser,
-                        child: _isLoading
+                        onPressed: state.isLoading ? null : _registerUser,
+                        child: state.isLoading
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
@@ -562,7 +570,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: _isLoading ? null : _signUpWithGoogle,
+                        onPressed: state.isLoading ? null : _signUpWithGoogle,
                         icon: const Icon(
                           Icons.g_mobiledata,
                           color: Colors.red,
@@ -651,6 +659,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 

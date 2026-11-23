@@ -5,7 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/location/location_store.dart';
+import 'core/preferences/app_preferences.dart';
+import 'core/preferences/preferences_cubit.dart';
 import 'core/router/app_shell.dart';
+import 'core/theme/app_theme.dart';
 import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
 
@@ -29,6 +32,9 @@ Future<void> main() async {
     await dotenv.load();
   } catch (_) { }
 
+  // Preferences are local, so they load even when Firebase is unreachable.
+  final preferences = await PreferencesCubit.loadPersisted();
+
   try {
     await Firebase.initializeApp();
 
@@ -39,7 +45,12 @@ Future<void> main() async {
       await LocationStore.load();
     }
 
-    runApp(MediMatchApp(startSignedIn: restored != null));
+    runApp(
+      MediMatchApp(
+        startSignedIn: restored != null,
+        preferences: preferences,
+      ),
+    );
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
     runApp(FirebaseErrorApp(message: e.toString()));
@@ -80,24 +91,41 @@ class FirebaseErrorApp extends StatelessWidget {
 }
 
 class MediMatchApp extends StatelessWidget {
-  const MediMatchApp({super.key, this.startSignedIn = false});
+  const MediMatchApp({
+    super.key,
+    this.startSignedIn = false,
+    this.preferences = AppPreferences.defaults,
+  });
 
   /// True when a persisted Firebase session was restored before the first
   /// frame. Signed-in users skip onboarding and land in the app shell.
   final bool startSignedIn;
 
+  /// Snapshot read from `shared_preferences` before the first frame.
+  final AppPreferences preferences;
+
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => LocationCubit()..loadIfPermitted(),
-      child: MaterialApp(
-        title: 'MediMatch',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF016960)),
-          useMaterial3: true,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<PreferencesCubit>(
+          create: (context) => PreferencesCubit(preferences),
         ),
-        home: startSignedIn ? const AppShell() : const OnboardingScreen(),
+        BlocProvider<LocationCubit>(
+          create: (context) => LocationCubit()..loadIfPermitted(),
+        ),
+      ],
+      child: BlocBuilder<PreferencesCubit, AppPreferences>(
+        builder: (context, preferences) {
+          return MaterialApp(
+            title: 'MediMatch',
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(),
+            darkTheme: buildDarkAppTheme(),
+            themeMode: preferences.themeMode,
+            home: startSignedIn ? const AppShell() : const OnboardingScreen(),
+          );
+        },
       ),
     );
   }

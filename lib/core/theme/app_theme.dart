@@ -76,3 +76,43 @@ ThemeData buildAppTheme() {
     ),
   );
 }
+
+/// Dark counterpart used when the saved theme preference is `dark`.
+///
+/// Screens that paint explicit light cards keep their brand colours; Material
+/// surfaces, dialogs and inputs switch to the dark scheme.
+ThemeData buildDarkAppTheme() {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: AppColors.primary,
+    brightness: Brightness.dark,
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: const Color(0xFF111318),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF111318),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      centerTitle: false,
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF1B1F2A),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radius),
+        side: const BorderSide(color: Color(0xFF2A303C)),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        minimumSize: const Size.fromHeight(52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+  );
+}

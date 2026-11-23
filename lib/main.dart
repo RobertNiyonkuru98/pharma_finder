@@ -5,8 +5,28 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/location/location_store.dart';
+import 'core/router/app_shell.dart';
 import 'features/location/live_location.dart';
 import 'screen/onboarding_screen.dart';
+
+/// Returns the session Firebase persisted on disk, or `null` when signed out.
+///
+/// `currentUser` can still be `null` for a moment on a cold start while
+/// Firebase Auth restores the session, so wait for the first auth state event
+/// before deciding where to send the user.
+Future<User?> _restoreSession() async {
+  final auth = FirebaseAuth.instance;
+  if (auth.currentUser != null) return auth.currentUser;
+
+  try {
+    return await auth.authStateChanges().first.timeout(
+      const Duration(seconds: 3),
+    );
+  } catch (error) {
+    debugPrint('Session restore failed: $error');
+    return auth.currentUser;
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,13 +47,15 @@ Future<void> main() async {
     // here.
     await Firebase.initializeApp();
 
+    final restored = await _restoreSession();
+
     // Restore the last known position before the first frame so the GPS card
     // and the profile's "Current Base" have data on a warm start.
-    if (FirebaseAuth.instance.currentUser != null) {
+    if (restored != null) {
       await LocationStore.load();
     }
 
-    runApp(const MediMatchApp());
+    runApp(MediMatchApp(startSignedIn: restored != null));
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
     runApp(FirebaseErrorApp(message: e.toString()));
@@ -74,7 +96,11 @@ class FirebaseErrorApp extends StatelessWidget {
 }
 
 class MediMatchApp extends StatelessWidget {
-  const MediMatchApp({super.key});
+  const MediMatchApp({super.key, this.startSignedIn = false});
+
+  /// True when a persisted Firebase session was restored before the first
+  /// frame. Signed-in users skip onboarding and land in the app shell.
+  final bool startSignedIn;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +113,7 @@ class MediMatchApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF016960)),
           useMaterial3: true,
         ),
-        home: const OnboardingScreen(),
+        home: startSignedIn ? const AppShell() : const OnboardingScreen(),
       ),
     );
   }

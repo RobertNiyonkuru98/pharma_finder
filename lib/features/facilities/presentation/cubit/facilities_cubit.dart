@@ -3,13 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/facility.dart';
 import 'facilities_state.dart';
 
-/// Template Cubit — the pattern every other feature copies.
-///
-/// Screen -> Cubit -> State -> widget.
-///
-/// Deliberately returns hardcoded data for now so the UI can be built before
-/// Firebase exists. David replaces [_sample] with a Firestore repository call
-/// in `features/facilities/data/`.
 class FacilitiesCubit extends Cubit<FacilitiesState> {
   FacilitiesCubit() : super(FacilitiesInitial());
 

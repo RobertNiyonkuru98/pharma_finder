@@ -1,17 +1,12 @@
 import 'package:equatable/equatable.dart';
-
-/// A healthcare facility the user can search for.
-///
-/// Domain layer: no Firebase, no Flutter imports. This is the shape the whole
-/// app agrees on. David wires the Firestore repository to produce these.
 class Facility extends Equatable {
   final String id;
   final String name;
-  final String type; // pharmacy | clinic | hospital
+  final String type; 
   final String area;
   final String openingHours;
-  final List<String> acceptedPlans; // e.g. ['Mutuelle', 'Britam']
-  final List<String> acceptedPlanIds; // e.g. ['rssb', 'britam']
+  final List<String> acceptedPlans; 
+  final List<String> acceptedPlanIds; 
   final bool hasStock;
   final double? rating;
   final double? distanceKm;
@@ -19,7 +14,7 @@ class Facility extends Equatable {
   final String? phone;
   final List<String> languages;
   final List<String>
-  serviceTags; // e.g. ['prescription_refill', 'maternal_care']
+  serviceTags;
 
   const Facility({
     required this.id,

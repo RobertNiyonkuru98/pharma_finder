@@ -34,7 +34,6 @@ class _AppShellState extends State<AppShell> {
             const FacilitiesSearchScreen(),
             EmergencyScreen(user: UserProfile.current()),
             ProfileScreen(user: UserProfile.current()),
-            // ProfileScreen(),
           ],
         ),
         bottomNavigationBar: NavigationBar(

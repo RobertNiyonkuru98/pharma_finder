@@ -2,9 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pharma_finder/features/facilities/presentation/cubit/facilities_cubit.dart';
 import 'package:pharma_finder/features/facilities/presentation/cubit/facilities_state.dart';
 
-/// UNIT test — the Cubit in isolation, no widgets, no Firebase.
-///
-/// This is the template for every other feature's unit test.
+
 void main() {
   group('FacilitiesCubit', () {
     test('starts in Initial state', () {

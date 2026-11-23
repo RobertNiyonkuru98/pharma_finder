@@ -10,10 +10,6 @@ import '../cubit/facilities_cubit.dart';
 import '../cubit/facilities_state.dart';
 import '../widgets/home_sections.dart';
 
-/// Template screen — the pattern every other feature copies.
-///
-/// Note the three branches: loading, empty/error, and loaded. A screen that
-/// only renders the happy path loses marks, and looks broken on a real device.
 class FacilitiesScreen extends StatefulWidget {
   const FacilitiesScreen({super.key, this.onOpenSearch, this.onOpenProfile});
 

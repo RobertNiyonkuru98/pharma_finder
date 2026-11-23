@@ -76,5 +76,78 @@ void main() {
         greaterThan(1),
       );
     });
+
+    test('quick open-now filter updates selected filter state', () async {
+      final cubit = FacilitiesCubit();
+      await cubit.load();
+
+      cubit.toggleQuickFilter(FacilityQuickFilter.openNow);
+
+      final state = cubit.state as FacilitiesLoaded;
+      expect(
+        state.activeQuickFilters.contains(FacilityQuickFilter.openNow),
+        isTrue,
+      );
+    });
+
+    test(
+      'insurance multi-select uses OR logic within insurance group',
+      () async {
+        final cubit = FacilitiesCubit();
+        await cubit.load();
+
+        cubit
+          ..toggleInsurancePlan('rssb')
+          ..toggleInsurancePlan('britam');
+
+        final state = cubit.state as FacilitiesLoaded;
+        expect(state.facilities, isNotEmpty);
+        expect(
+          state.facilities.any((f) => f.acceptedPlanIds.contains('rssb')),
+          isTrue,
+        );
+        expect(
+          state.facilities.any((f) => f.acceptedPlanIds.contains('britam')),
+          isTrue,
+        );
+      },
+    );
+
+    test('different filter groups compose with AND logic', () async {
+      final cubit = FacilitiesCubit();
+      await cubit.load();
+
+      cubit
+        ..setCategory(FacilityCategoryFilter.pharmacies)
+        ..toggleInsurancePlan('rssb')
+        ..setOperatingHoursFilter(OperatingHoursFilter.openNow)
+        ..setDistanceRadiusFilter(DistanceRadiusFilter.fiveKm);
+
+      final state = cubit.state as FacilitiesLoaded;
+      expect(state.facilities.length, 1);
+      expect(state.facilities.single.name, contains('Pharmacie Conseil'));
+    });
+
+    test('clearFilters resets query and every filter group', () async {
+      final cubit = FacilitiesCubit();
+      await cubit.load();
+
+      cubit
+        ..search('kigali')
+        ..setCategory(FacilityCategoryFilter.pharmacies)
+        ..toggleInsurancePlan('rssb')
+        ..setOperatingHoursFilter(OperatingHoursFilter.openNow)
+        ..setDistanceRadiusFilter(DistanceRadiusFilter.oneKm)
+        ..toggleSpecificNeed(SpecificNeedFilter.prescriptionRefill)
+        ..clearFilters();
+
+      final state = cubit.state as FacilitiesLoaded;
+      expect(state.query, isEmpty);
+      expect(state.category, FacilityCategoryFilter.allCare);
+      expect(state.selectedInsurancePlanIds, isEmpty);
+      expect(state.operatingHoursFilter, OperatingHoursFilter.anyTime);
+      expect(state.distanceRadiusFilter, DistanceRadiusFilter.fiveKm);
+      expect(state.selectedNeeds, isEmpty);
+    });
   });
 }
